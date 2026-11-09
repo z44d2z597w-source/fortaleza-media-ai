@@ -9,10 +9,10 @@ from pathlib import Path
 ARCHIVO_GUION = Path("guion.json")
 ARCHIVO_HISTORIAL = Path("historial_creativo.json")
 
-# --- COMBINADOR ALEATORIO (Para que NUNCA se repita si la IA falla) ---
-PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada", "un hacker adolescente", "un policía corrupto", "un médico del turno nocturno"]
-ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor", "una casa inteligente", "un laboratorio subterráneo", "una biblioteca antigua", "un crucero en el medio del océano"]
-OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "un teléfono que solo recibe llamadas", "una llave que no abre nada", "un diario con páginas en blanco", "una muñeca rota", "una grabación de voz"]
+# --- COMBINADOR INFINITO (Para el plan de respaldo) ---
+PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada", "un hacker adolescente", "un policía corrupto", "un médico del turno nocturno", "un astronauta varado"]
+ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor", "una casa inteligente", "un laboratorio subterráneo", "una biblioteca antigua", "un crucero en el medio del océano", "un pueblo fantasma"]
+OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "un teléfono que solo recibe llamadas", "una llave que no abre nada", "un diario con páginas en blanco", "una muñeca rota", "una grabación de voz", "una fotografía que cambia"]
 
 GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana"]
 VOCES = ["es-MX-DaliaNeural", "es-MX-JorgeNeural"]
@@ -35,7 +35,7 @@ def generar_con_groq(prompt):
     if not api_key: return None
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     for modelo in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
-        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un director de cine de élite. Creas guiones estructurados."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
+        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un director de cine de élite. Creas guiones estructurados y únicos."}, {"role": "user", "content": prompt}], "temperature": 0.9, "response_format": {"type": "json_object"}}
         try:
             resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
             if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
@@ -56,31 +56,41 @@ def crear_plan_de_produccion():
     historial = cargar_historial()
     temas_prohibidos = ", ".join(historial) if historial else "Ninguno"
 
-    # Prompt Maestro para que genere Video Largo + 3 Shorts
-    prompt = f"""
-    Actúa como un director de cine. Crea una historia del género '{genero}'.
-    NO USES estos temas anteriores: {temas_prohibidos}.
-    
-    DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
-    {{
-        "titulo": "Título impactante",
-        "guion_largo": "Historia completa de 3000 palabras dividida en 5 capítulos.",
-        "shorts": [
-            {{
-                "parte": 1,
-                "gancho": "Texto de 40 segundos que enganche y diga 'Parte 1'."
-            }},
-            {{
-                "parte": 2,
-                "gancho": "Texto de 40 segundos que enganche y diga 'Parte 2'."
-            }},
-            {{
-                "parte": 3,
-                "gancho": "Texto de 40 segundos que diga 'Parte 3' y llame a ver el video completo."
-            }}
-        ]
-    }}
-    """
+    # DECISIÓN ALEATORIA: ¿Mini-serie o Video Único?
+    es_mini_serie = random.choice([True, False])
+    formato = "MINI-SERIE (3 PARTES)" if es_mini_serie else "VIDEO ÚNICO (AUTOCONCLUSIVO)"
+    print(f"[DIRECTOR] Creando: {genero} | Formato: {formato} | Voz: {voz}")
+
+    if es_mini_serie:
+        prompt = f"""
+        Actúa como un director de cine. Crea una MINI-SERIE de 3 partes del género '{genero}'.
+        NO USES estos temas anteriores: {temas_prohibidos}.
+        
+        DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
+        {{
+            "titulo": "Título impactante",
+            "guion_largo": "Historia completa de 2500 palabras.",
+            "shorts": [
+                {{"parte": 1, "gancho": "Texto de 40 segundos que enganche y diga 'Parte 1'."}},
+                {{"parte": 2, "gancho": "Texto de 40 segundos que enganche y diga 'Parte 2'."}},
+                {{"parte": 3, "gancho": "Texto de 40 segundos que diga 'Parte 3' y llame a ver el video completo."}}
+            ]
+        }}
+        """
+    else:
+        prompt = f"""
+        Actúa como un director de cine. Crea un VIDEO ÚNICO autoconclusivo del género '{genero}'.
+        NO USES estos temas anteriores: {temas_prohibidos}.
+        
+        DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
+        {{
+            "titulo": "Título impactante",
+            "guion_largo": "Historia completa de 2500 palabras.",
+            "shorts": [
+                {{"parte": 1, "gancho": "Texto de 40 segundos que resuma la historia completa y invite a ver el video largo."}}
+            ]
+        }}
+        """
 
     plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
 
@@ -97,8 +107,8 @@ def crear_plan_de_produccion():
             "guion_largo": f"{p.capitalize()} entró a {e} y encontró {o}. A partir de ese momento, nada volvió a ser igual. La historia completa te dejará sin aliento.",
             "shorts": [
                 {"parte": 1, "gancho": f"Parte 1: {p.capitalize()} estaba en {e}. Encontró {o}. Pero había un problema..."},
-                {"parte": 2, "gancho": f"Parte 2: Lo que {p} descubrió sobre {o} cambió las reglas. Nada era lo que parecía."},
-                {"parte": 3, "gancho": f"Parte 3: El final de esta historia te dejará helado. Mira el video completo en mi canal."}
+                {"parte": 2, "gancho": f"Parte 2: Lo que {p} descubrió sobre {o} cambió las reglas."},
+                {"parte": 3, "gancho": f"Parte 3: El final de esta historia te dejará helado. Mira el video completo."}
             ]
         }
 
@@ -107,7 +117,8 @@ def crear_plan_de_produccion():
     return {
         "titulo": plan["titulo"],
         "voz": voz,
-        "guion_largo": [{"narracion": plan["guion_largo"]}], # Lo dividimos internamente en render_long
+        "formato_episodico": es_mini_serie,
+        "guion_largo": [{"narracion": plan["guion_largo"]}],
         "shorts": plan["shorts"]
     }
 
@@ -115,7 +126,7 @@ def guardar_guion():
     guion = crear_plan_de_produccion()
     with open(ARCHIVO_GUION, "w", encoding="utf-8") as f:
         json.dump(guion, f, ensure_ascii=False, indent=4)
-    print(f"GUION INFINITO GUARDADO: {guion['titulo']}")
+    print(f"GUION GUARDADO: {guion['titulo']} | Mini-serie: {guion['formato_episodico']}")
 
 if __name__ == "__main__":
     guardar_guion()
