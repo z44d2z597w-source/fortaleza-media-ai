@@ -5,42 +5,25 @@ import requests
 import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
-
-try:
-    from pytrends.request import TrendReq
-    TIENE_PYTRENDS = True
-except ImportError:
-    TIENE_PYTRENDS = False
+import os
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.0
-# CEREBRO COMPLETO: TENDENCIAS + DRAMA IA + LOOP
+# FORTALEZA MEDIA AI 11.0
+# CEREBRO EDITORIAL: ESTRUCTURA PROFESIONAL Y COHERENTE
 # ==========================================================
 
-VERSION = "10.0"
-IDIOMA = "es-MX"
 ARCHIVO_GUION = Path("guion.json")
 ARCHIVO_HISTORIAL = Path("historial_temas.json")
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.0"}
 
-# Historias de respaldo por si la IA se cae
 HISTORIAS_RESPALDO = [
     {
         "titulo": "El secreto de la habitación 404",
         "escenas": [
-            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "¡No vas a creer esto! Un hombre entró a un hotel y pidió la habitación 404. Lo que encontró adentro cambió su vida."},
-            {"numero": 2, "duracion": 12, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Al abrir la puerta, la habitación no tenía muebles. Solo había un espejo gigante que reflejaba un cuarto diferente."},
-            {"numero": 3, "duracion": 12, "tipo": "revelacion", "titulo": "El giro", "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio. Del otro lado, alguien exactamente igual a él lo estaba esperando."},
-            {"numero": 4, "duracion": 8, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te digo... ¡No vas a creer esto!"}
-        ]
-    },
-    {
-        "titulo": "La desaparición en el bosque",
-        "escenas": [
-            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "¡No vas a creer esto! Una pareja acampando en el bosque escuchó pasos afuera de su tienda de campaña."},
-            {"numero": 2, "duracion": 12, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Los pasos se detuvieron. Cuando salieron a revisar, encontraron huellas que no eran humanas, caminando en círculos perfectos."},
-            {"numero": 3, "duracion": 12, "tipo": "revelacion", "titulo": "El giro", "narracion": "Al día siguiente, las fotos de su cámara mostraban que algo estuvo observándolos desde los árboles toda la noche."},
-            {"numero": 4, "duracion": 8, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te digo... ¡No vas a creer esto!"}
+            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista en los planos. Eso le pasó a un huésped."},
+            {"numero": 2, "duracion": 12, "tipo": "contexto", "titulo": "El contexto", "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos. Le dijo que no hiciera ruido después de medianoche."},
+            {"numero": 3, "duracion": 15, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Al abrir la puerta, la habitación no tenía muebles. Solo había un espejo gigante que reflejaba un cuarto diferente al suyo."},
+            {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio. Del otro lado, alguien exactamente igual a él lo estaba esperando con una sonrisa."},
+            {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?"}
         ]
     }
 ]
@@ -64,88 +47,122 @@ def tema_ya_utilizado(titulo, historial):
             return True
     return False
 
-def obtener_tendencias_google():
-    if not TIENE_PYTRENDS: 
-        print("[TENDENCIAS] pytrends no instalado. Saltando...")
-        return []
-    print("[TENDENCIAS] Consultando Google Trends (México)...")
-    try:
-        pytrends = TrendReq(hl='es-MX', tz=-360)
-        trending = pytrends.trending_searches(pn='mexico')[0].tolist()
-        historial = cargar_historial()
-        return [t for t in trending if not tema_ya_utilizado(t, historial)][:3]
-    except Exception as e:
-        print(f"[TENDENCIAS] Error: {e}")
-        return []
+def generar_con_groq(prompt):
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        print("[GROQ] No hay GROQ_API_KEY configurada. Saltando...")
+        return None
 
-def generar_historia_con_ia(prompt):
-    print("[IA] Escribiendo historia con Pollinations...")
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": "Eres un guionista experto en videos virales de YouTube Shorts. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 800
+    }
+    
+    try:
+        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        respuesta.raise_for_status()
+        return respuesta.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[GROQ] Error: {e}")
+        return None
+
+def generar_con_pollinations(prompt):
     prompt_encoded = urllib.parse.quote(prompt)
     url = f"https://text.pollinations.ai/{prompt_encoded}?model=openai"
-    
     try:
         respuesta = requests.get(url, timeout=60)
         respuesta.raise_for_status()
-        texto = respuesta.text.strip()
-        
-        # Limpiar el texto
-        texto = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto, flags=re.IGNORECASE|re.MULTILINE).strip()
-        oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto) if len(o.strip()) > 10]
-        
-        if len(oraciones) < 4: return None
-
-        cuarto = len(oraciones) // 4
-        escenas = [
-            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": " ".join(oraciones[:cuarto])},
-            {"numero": 2, "duracion": 12, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": " ".join(oraciones[cuarto:cuarto*2])},
-            {"numero": 3, "duracion": 12, "tipo": "revelacion", "titulo": "El giro", "narracion": " ".join(oraciones[cuarto*2:cuarto*3])},
-            {"numero": 4, "duracion": 8, "tipo": "cierre", "titulo": "El loop", "narracion": " ".join(oraciones[cuarto*3:])}
-        ]
-        
-        return {
-            "titulo": "La historia que no te esperabas",
-            "formato": "vertical",
-            "formato_legible": "YouTube Shorts (IA Drama)",
-            "duracion": 40,
-            "escenas": escenas
-        }
+        return respuesta.text.strip()
     except Exception as e:
-        print(f"[IA] Error generando historia: {e}")
+        print(f"[POLLINATIONS] Error: {e}")
         return None
 
+def estructurar_guion(texto_ia, titulo):
+    texto_ia = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto_ia, flags=re.IGNORECASE|re.MULTILINE).strip()
+    oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto_ia) if len(o.strip()) > 10]
+    
+    if len(oraciones) < 5:
+        return None
+
+    quinto = max(1, len(oraciones) // 5)
+    escenas = [
+        {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": " ".join(oraciones[:quinto])},
+        {"numero": 2, "duracion": 12, "tipo": "contexto", "titulo": "El contexto", "narracion": " ".join(oraciones[quinto:quinto*2])},
+        {"numero": 3, "duracion": 15, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": " ".join(oraciones[quinto*2:quinto*3])},
+        {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": " ".join(oraciones[quinto*3:quinto*4])},
+        {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": " ".join(oraciones[quinto*4:])}
+    ]
+    
+    for i in range(1, 5):
+        if not escenas[i]["narracion"]:
+            escenas[i]["narracion"] = escenas[i-1]["narracion"]
+
+    return {
+        "titulo": titulo,
+        "formato": "vertical",
+        "formato_legible": "YouTube Shorts (Estructurado)",
+        "duracion": 60,
+        "escenas": escenas
+    }
+
 def crear_guion():
-    # 1. Intentar con Tendencias de Google
-    tendencias = obtener_tendencias_google()
-    if tendencias:
-        for t in tendencias:
-            prompt = f"Escribe un guion corto y viral en español sobre el tema en tendencia '{t}'. REGLA 1: Empieza con una frase de 5 palabras que impacte. REGLA 2: El final debe terminar con las mismas palabras del inicio para crear un LOOP. Divide el texto en 4 escenas separadas por saltos de línea."
-            guion = generar_historia_con_ia(prompt)
-            if guion:
-                guion["titulo"] = f"TENDENCIA: {t[:40]}"
-                guion["formato_legible"] = "YouTube Shorts (Tendencia)"
-                return guion
+    try:
+        from pytrends.request import TrendReq
+        print("[TENDENCIAS] Consultando Google Trends...")
+        pytrends = TrendReq(hl='es-MX', tz=-360)
+        trending = pytrends.trending_searches(pn='mexico')[0].tolist()
+        historial = cargar_historial()
+        tendencias_nuevas = [t for t in trending if not tema_ya_utilizado(t, historial)][:3]
+    except Exception as e:
+        print(f"[TENDENCIAS] No disponible: {e}")
+        tendencias_nuevas = []
 
-    # 2. Intentar con Drama IA
-    print("[EDITORIAL] Sin tendencias. Pasando a Drama IA...")
-    prompt_drama = "Escribe una historia de misterio o drama (estilo Reddit) en español. REGLA 1: Empieza con un gancho brutal (Ej: 'No vas a creer esto:'). REGLA 2: El último segundo debe conectar perfectamente con la primera frase para crear un LOOP. Usa frases cortas. Divide el texto en 4 escenas separadas por saltos de línea."
-    guion = generar_historia_con_ia(prompt_drama)
-    if guion: return guion
+    prompt_base = (
+        "Escribe un guion para un video vertical de YouTube Shorts sobre {tema}. "
+        "La historia debe tener exactamente esta estructura de 5 escenas, separadas por saltos de línea: "
+        "1. Gancho (una frase de 5-8 palabras que impacte). "
+        "2. Contexto (la situación inicial). "
+        "3. Desarrollo (el conflicto o problema). "
+        "4. Clímax (la revelación o el giro inesperado). "
+        "5. Cierre (una frase que conecte con el inicio para crear un loop). "
+        "Usa un tono dramático y directo. No incluyas títulos de escena, solo el texto narrado. No uses comillas."
+    )
 
-    # 3. Plan B: Historia pre-escrita
-    print("[EDITORIAL] IA falló. Usando historia de respaldo...")
+    for tema in tendencias_nuevas:
+        prompt = prompt_base.format(tema=tema)
+        texto_ia = generar_con_groq(prompt) or generar_con_pollinations(prompt)
+        if texto_ia:
+            guion = estructurar_guion(texto_ia, f"TENDENCIA: {tema[:40]}")
+            if guion: return guion
+
+    temas_drama = ["una traición familiar", "un secreto de pareja", "un misterio en el trabajo", "una desaparición inexplicable"]
+    tema_aleatorio = random.choice(temas_drama)
+    prompt = prompt_base.format(tema=tema_aleatorio)
+    texto_ia = generar_con_groq(prompt) or generar_con_pollinations(prompt)
+    
+    if texto_ia:
+        guion = estructurar_guion(texto_ia, f"El misterio de {tema_aleatorio}")
+        if guion: return guion
+
+    print("[EDITORIAL] APIs fallaron. Usando respaldo.")
     historia = random.choice(HISTORIAS_RESPALDO)
     return {
         "titulo": historia["titulo"],
         "formato": "vertical",
         "formato_legible": "YouTube Shorts (Respaldo)",
-        "duracion": 40,
+        "duracion": 60,
         "escenas": historia["escenas"]
     }
 
 def guardar_guion():
     guion = crear_guion()
-    
-    guion["idioma"] = IDIOMA
+    guion["idioma"] = "es-MX"
     guion["creado"] = datetime.now(timezone.utc).isoformat()
     guion["hashtags"] = ["#Shorts", "#Viral", "#Misterio", "#FORTALEZAMEDIA"]
     guion["descripcion"] = f"{guion['titulo']}\n\n" + " ".join(guion["hashtags"])
@@ -160,10 +177,9 @@ def guardar_guion():
     print("=" * 55)
     print("GUION GENERADO CON ÉXITO")
     print("Título:", guion["titulo"])
-    print("Tipo:", guion["formato_legible"])
+    print("Escenas:", len(guion["escenas"]))
     print("=" * 55)
     return guion
 
-# ESTA LÍNEA ES LA QUE FALTABA Y CAUSABA EL ERROR:
 if __name__ == "__main__":
     guardar_guion()
