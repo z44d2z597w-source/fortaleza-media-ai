@@ -15,21 +15,19 @@ from pathlib import Path
 import requests
 import edge_tts
 import imageio_ffmpeg
-from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================================
-# FORTALEZA MEDIA AI 20.0 — TITÁN IA (100% GRATIS)
+# FORTALEZA MEDIA AI 21.0 — EDICIÓN DINÁMICA Y ORIGINAL
 # ==========================================================
+
 FPS = 30
-VOZ = "es-MX-DaliaNeural"
-VELOCIDAD_VOZ = "+8%"
 OUTPUT = Path("output")
 RECURSOS = OUTPUT / "recursos"
 MAX_ESCENAS = 20
 
 CONFIG_DEFECTO = {"corte_min": 1.5, "corte_max": 3.5}
 PALABRAS_IMPACTO = ["increíble", "sorprendente", "misterio", "secreto", "peligro", "jamás", "nunca", "impactante", "aterrador", "asombroso", "oculto", "verdad", "ciencia", "descubrimiento", "tendencia", "viral", "drama", "historia", "enigma", "prohibido"]
-PALETAS = [("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"), ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64")]
 
 def preparar_carpetas():
     OUTPUT.mkdir(exist_ok=True)
@@ -82,7 +80,7 @@ def calcular_cortes(palabras, duracion_total):
     cortes = [0.0]
     for c in puntos:
         if c < 5.0:
-            if c - cortes[-1] >= 1.2: cortes.append(c) # Cortes rápidos al inicio
+            if c - cortes[-1] >= 1.2: cortes.append(c) # Cortes ultrarrápidos al inicio
         else:
             if c - cortes[-1] >= CONFIG_DEFECTO["corte_min"] and duracion_total - c >= CONFIG_DEFECTO["corte_min"]: 
                 cortes.append(c)
@@ -96,9 +94,11 @@ def calcular_cortes(palabras, duracion_total):
     else: resultado[-1] = duracion_total
     return resultado
 
-def generar_imagen_ia(prompt, num_escena, num_toma, formato):
-    print(f"[IA VISUAL] Generando imagen {num_escena}-{num_toma}...")
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
+def generar_imagen_ia(prompt, num_escena, num_toma, formato, estilo_visual):
+    print(f"[IA VISUAL] Generando imagen {num_escena}-{num_toma} estilo: {estilo_visual}...")
+    # Mezclamos el estilo visual elegido por el cerebro con la narración
+    prompt_completo = f"{estilo_visual}, vertical 9:16, {prompt}"
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt_completo)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
     try:
         resp = requests.get(url, timeout=60)
         ruta = RECURSOS / f"ia_{num_escena:02d}_{num_toma:02d}.jpg"
@@ -109,8 +109,9 @@ def generar_imagen_ia(prompt, num_escena, num_toma, formato):
         print(f"[IA VISUAL] Error: {e}")
         return None
 
-async def generar_voz(texto, ruta):
-    tts = edge_tts.Communicate(texto, voice=VOZ, rate=VELOCIDAD_VOZ)
+async def generar_voz(texto, ruta, voz_elegida):
+    print(f"[VOZ] Generando audio con: {voz_elegida}")
+    tts = edge_tts.Communicate(texto, voice=voz_elegida, rate="+8%")
     audio, marcas = bytearray(), []
     async for f in tts.stream():
         if f["type"] == "audio": audio.extend(f["data"])
@@ -161,24 +162,30 @@ def crear_scroll_stopper(formato):
 def crear_toma(ffmpeg, ruta_img, destino, duracion, idx, formato, es_impacto):
     ancho, alto = formato["ancho"], formato["alto"]
     
+    # 10 Movimientos de cámara para que NUNCA se vea estático
     movimientos = [
-        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
-        ("min(zoom+0.0020,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
-        ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"),
+        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"), # Zoom In
+        ("min(zoom+0.0025,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"), # Zoom + Paneo Der
+        ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"), # Zoom Out + Paneo Izq
+        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)+on*0.15"), # Zoom + Paneo Abajo
+        ("min(zoom+0.0020,1.35)", "iw/2-(iw/zoom/2)+on*0.20", "ih/2-(ih/zoom/2)"), # Paneo Rápido Der
+        ("max(zoom-0.0015,1.0)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)-on*0.15"), # Zoom Out + Paneo Arriba
+        ("min(zoom+0.0012,1.25)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)-on*0.10"), # Diagonal
+        ("min(zoom+0.0030,1.5)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"), # Zoom Rápido
     ]
     zoom, x, y = movimientos[idx % len(movimientos)]
 
     if es_impacto:
-        # Zoom punch para el gancho
+        # Efecto de golpe visual (Zoom punch)
         zoompan = f"zoompan=z='if(lt(on,15),1.6-on/25,1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={FPS}"
     else:
         zoompan = f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}"
 
     filtros = [
-        f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase",
-        f"crop={int(ancho*1.2)}:{int(alto*1.2)}",
+        f"scale={int(ancho*1.3)}:{int(alto*1.3)}:force_original_aspect_ratio=increase",
+        f"crop={int(ancho*1.3)}:{int(alto*1.3)}",
         zoompan,
-        "eq=contrast=1.18:brightness=-0.02:saturation=1.30:gamma=0.95",
+        "eq=contrast=1.15:brightness=-0.02:saturation=1.25",
         "unsharp=5:5:0.8:5:5:0.0"
     ]
     
@@ -211,7 +218,11 @@ def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
 async def crear_video():
     preparar_carpetas()
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
+    
     titulo = str(guion.get("titulo", "Viral"))
+    voz_elegida = str(guion.get("voz", "es-MX-DaliaNeural")) # Leemos la voz
+    estilo_visual = str(guion.get("estilo_visual", "Cinematic 8k")) # Leemos el estilo
+    
     escenas = [e for e in guion.get("escenas", []) if str(e.get("narracion", "")).strip()][:MAX_ESCENAS]
     formato = {"nombre": "vertical", "ancho": 1080, "alto": 1920}
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -221,14 +232,16 @@ async def crear_video():
     scroll = crear_scroll_stopper(formato)
 
     print("============================================================")
-    print("FORTALEZA MEDIA AI 20.0 — PRODUCCIÓN TITÁN IA")
+    print(f"FORTALEZA MEDIA AI 21.0 — PRODUCIENDO: {titulo}")
+    print(f"VOZ: {voz_elegida} | ESTILO: {estilo_visual}")
     print("============================================================")
 
     for num_escena, datos in enumerate(escenas):
         print(f"\n[ESCENA {num_escena + 1}/{len(escenas)}]")
         narracion = str(datos["narracion"]).strip()
         ruta_voz = RECURSOS / f"voz_{num_escena:02d}.mp3"
-        marcas = await generar_voz(narracion, str(ruta_voz))
+        
+        marcas = await generar_voz(narracion, str(ruta_voz), voz_elegida)
         dur_voz = obtener_duracion(ffmpeg, ruta_voz)
         
         cortes = calcular_cortes(marcas, dur_voz)
@@ -240,9 +253,9 @@ async def crear_video():
             if dur <= 0.4: continue
             
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
-            prompt_video = f"Cinematic vertical 9:16, highly detailed, dramatic lighting, {narracion[:120]}"
             
-            img_ia = generar_imagen_ia(prompt_video, num_escena, i, formato)
+            # Generamos imagen IA con el estilo elegido
+            img_ia = generar_imagen_ia(narracion[:120], num_escena, i, formato, estilo_visual)
             if img_ia:
                 crear_toma(ffmpeg, img_ia, ruta_toma, dur, num_escena*10+i, formato, (i==0))
                 tomas_mp4.append(str(ruta_toma))
@@ -265,7 +278,7 @@ async def crear_video():
         escenas_finales.append(str(ruta_final_escena))
         duraciones_finales.append(obtener_duracion(ffmpeg, ruta_final_escena))
 
-    print("\n[RENDER] Uniendo escenas con transiciones...")
+    print("\n[RENDER] Uniendo escenas...")
     video_unido = OUTPUT / "base.mp4"
     if len(escenas_finales) > 1:
         filtros = []
@@ -286,12 +299,12 @@ async def crear_video():
     whooshes = [whoosh] * int(dur_total // 2.5)
     destino = OUTPUT / "fortaleza_final.mp4"
     
-    print("[RENDER] Mezclando audio profesional y aplicando barra de progreso...")
+    print("[RENDER] Mezclando audio y aplicando edición final...")
     mezcla_final(ffmpeg, str(video_unido), musica, whooshes, str(destino), dur_total)
     shutil.copy2(destino, OUTPUT / "fortaleza_short.mp4")
     
     print("\n============================================================")
-    print("✅ PRODUCCIÓN TITÁN 20.0 COMPLETADA CON ÉXITO")
+    print("✅ PRODUCCIÓN 21.0 COMPLETADA CON ÉXITO")
     print("============================================================")
     return str(destino)
 
