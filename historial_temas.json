@@ -28,5 +28,10 @@
         "titulo": "Antártida",
         "formato": "horizontal",
         "creado": "2026-11-09T10:42:40.340898+00:00"
+    },
+    {
+        "titulo": "Machu Picchu",
+        "formato": "vertical",
+        "creado": "2026-11-09T10:44:13.944394+00:00"
     }
 ]
