@@ -10,20 +10,6 @@ import os
 ARCHIVO_GUION = Path("guion.json")
 ARCHIVO_HISTORIAL = Path("historial_temas.json")
 
-# Historias de respaldo por si falla la IA
-HISTORIAS_RESPALDO = [
-    {
-        "titulo": "El secreto de la habitación 404",
-        "escenas": [
-            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista en los planos. Eso le pasó a un huésped."},
-            {"numero": 2, "duracion": 12, "tipo": "contexto", "titulo": "El contexto", "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos. Le dijo que no hiciera ruido después de medianoche."},
-            {"numero": 3, "duracion": 15, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Al abrir la puerta, la habitación no tenía muebles. Solo había un espejo gigante que reflejaba un cuarto diferente al suyo."},
-            {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio. Del otro lado, alguien exactamente igual a él lo estaba esperando con una sonrisa."},
-            {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?"}
-        ]
-    }
-]
-
 def cargar_historial():
     if not ARCHIVO_HISTORIAL.exists(): return []
     try:
@@ -36,8 +22,35 @@ def guardar_historial(historial):
     with open(ARCHIVO_HISTORIAL, "w", encoding="utf-8") as f:
         json.dump(historial, f, ensure_ascii=False, indent=4)
 
+def generar_con_groq(prompt):
+    """Conecta con Groq para generar texto de alta calidad."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        print("[GROQ] No hay GROQ_API_KEY configurada. Saltando...")
+        return None
+
+    headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": "Eres un guionista experto en videos virales de YouTube Shorts. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 800
+    }
+    
+    try:
+        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        respuesta.raise_for_status()
+        print("[GROQ] Guion generado con éxito.")
+        return respuesta.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[GROQ] Error: {e}")
+        return None
+
 def generar_con_pollinations(prompt):
-    """Genera texto usando Pollinations (sin API key)."""
+    """Respaldo usando Pollinations (texto)."""
     prompt_encoded = urllib.parse.quote(prompt)
     url = f"https://text.pollinations.ai/{prompt_encoded}?model=openai"
     try:
@@ -50,6 +63,7 @@ def generar_con_pollinations(prompt):
         return None
 
 def estructurar_guion(texto_ia, titulo):
+    """Divide el texto de la IA en 5 escenas perfectas."""
     texto_ia = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto_ia, flags=re.IGNORECASE|re.MULTILINE).strip()
     oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto_ia) if len(o.strip()) > 10]
     
@@ -98,20 +112,29 @@ def crear_guion():
     for tema in temas_drama:
         print(f"[EDITORIAL] Generando historia sobre: {tema}")
         prompt = prompt_base.format(tema=tema)
-        texto_ia = generar_con_pollinations(prompt)
+        
+        # Intentar Groq, luego Pollinations
+        texto_ia = generar_con_groq(prompt)
+        if not texto_ia:
+            texto_ia = generar_con_pollinations(prompt)
         
         if texto_ia:
             guion = estructurar_guion(texto_ia, f"El misterio de {tema}")
             if guion: return guion
 
     print("[EDITORIAL] APIs fallaron. Usando respaldo.")
-    historia = random.choice(HISTORIAS_RESPALDO)
     return {
-        "titulo": historia["titulo"],
+        "titulo": "El secreto de la habitación 404",
         "formato": "vertical",
         "formato_legible": "YouTube Shorts (Respaldo)",
         "duracion": 60,
-        "escenas": historia["escenas"]
+        "escenas": [
+            {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista en los planos. Eso le pasó a un huésped."},
+            {"numero": 2, "duracion": 12, "tipo": "contexto", "titulo": "El contexto", "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos. Le dijo que no hiciera ruido después de medianoche."},
+            {"numero": 3, "duracion": 15, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Al abrir la puerta, la habitación no tenía muebles. Solo había un espejo gigante que reflejaba un cuarto diferente al suyo."},
+            {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio. Del otro lado, alguien exactamente igual a él lo estaba esperando con una sonrisa."},
+            {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?"}
+        ]
     }
 
 def guardar_guion():
