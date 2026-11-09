@@ -41,8 +41,9 @@ def obtener_video_fondo():
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if pixabay_key:
         try:
-            query = random.choice(["subway surfers", "minecraft parkour", "gameplay"])
-            resp = requests.get("https://pixabay.com/api/videos/", params={"key": pixabay_key, "q": query, "orientation": "vertical", "per_page": 3}, timeout=15).json()
+            # CATEGORÍAS ALEATORIAS para no repetir fondo nunca
+            query = random.choice(["subway surfers", "minecraft parkour", "oddly satisfying", "satisfying video", "gameplay", "cooking video"])
+            resp = requests.get("https://pixabay.com/api/videos/", params={"key": pixabay_key, "q": query, "orientation": "vertical", "per_page": 5}, timeout=15).json()
             for hit in resp.get("hits", []):
                 url = hit.get("videos", {}).get("large", {}).get("url") or hit.get("videos", {}).get("medium", {}).get("url")
                 if url:
@@ -90,50 +91,49 @@ def generar_ass_cinetico(marcas, dur_voz, ruta_ass):
     with open(ruta_ass, "w", encoding="utf-8") as f: f.write(header + "\n".join(lineas))
     return ruta_ass
 
-async def crear_shorts():
+async def renderizar_short():
     preparar_entorno()
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
     
     voz = guion.get("voz", "es-MX-DaliaNeural")
-    shorts_data = guion.get("shorts", [])
+    narracion = guion["narracion"]
+    prompt = guion["prompt_visual"]
+    
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     video_fondo = obtener_video_fondo()
 
-    for idx, short in enumerate(shorts_data):
-        print(f"\n--- GENERANDO SHORT PARTE {short['parte']} ---")
-        gancho = short["gancho"]
+    print(f"--- GENERANDO SHORT: {guion['titulo_serie']} - Parte {guion['parte']} ---")
+    
+    ruta_voz = RECURSOS / "voz.mp3"
+    marcas = await generar_voz(narracion, ruta_voz, voz)
+    dur_voz = obtener_duracion(ffmpeg, ruta_voz)
+    
+    ruta_ass = generar_ass_cinetico(marcas, dur_voz, RECURSOS / "subs.ass")
+    img_ia = generar_imagen_ia(prompt, random.randint(1, 9999))
+
+    cmd = [ffmpeg, "-y"]
+    if video_fondo: cmd.extend(["-stream_loop", "-1", "-i", video_fondo])
+    else: cmd.extend(["-f", "lavfi", "-i", f"color=c=#071426:s={FORMATO['ancho']}x{FORMATO['alto']}:r={FPS}"])
         
-        ruta_voz = RECURSOS / f"voz_short_{idx}.mp3"
-        marcas = await generar_voz(gancho, ruta_voz, voz)
-        dur_voz = obtener_duracion(ffmpeg, ruta_voz)
-        
-        ruta_ass = generar_ass_cinetico(marcas, dur_voz, RECURSOS / f"subs_{idx}.ass")
-        img_ia = generar_imagen_ia(gancho[:100], random.randint(1, 9999))
+    cmd.extend(["-i", str(ruta_voz)])
+    if img_ia: cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", img_ia])
 
-        cmd = [ffmpeg, "-y"]
-        if video_fondo: cmd.extend(["-stream_loop", "-1", "-i", video_fondo])
-        else: cmd.extend(["-f", "lavfi", "-i", f"color=c=#071426:s={FORMATO['ancho']}x{FORMATO['alto']}:r={FPS}"])
-            
-        cmd.extend(["-i", str(ruta_voz)])
-        if img_ia: cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", img_ia])
+    filtros = []
+    filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.15:saturation=1.3[bg]")
+    actual = "[bg]"
+    if img_ia:
+        filtros.append(f"[2:v]scale=1080:1920[img]")
+        filtros.append(f"{actual}[img]overlay=0:0:enable='between(t,0,{dur_voz})'[v_img]")
+        actual = "[v_img]"
+    
+    filtros.append(f"{actual}ass={ruta_ass}[v_subs]")
+    filtros.append(f"[v_subs]drawbox=x=0:y=h-10:w='iw*t/{dur_voz}':h=10:color=red@0.9:t=fill[v_final]")
 
-        filtros = []
-        filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.15:saturation=1.3[bg]")
-        actual = "[bg]"
-        if img_ia:
-            filtros.append(f"[2:v]scale=1080:1920[img]")
-            filtros.append(f"{actual}[img]overlay=0:0:enable='between(t,0,{dur_voz})'[v_img]")
-            actual = "[v_img]"
-        
-        filtros.append(f"{actual}ass={ruta_ass}[v_subs]")
-        filtros.append(f"[v_subs]drawbox=x=0:y=h-10:w='iw*t/{dur_voz}':h=10:color=red@0.9:t=fill[v_final]")
-
-        destino = OUTPUT / f"fortaleza_short_{short['parte']}.mp4"
-        cmd.extend(["-filter_complex", ";".join(filtros), "-map", "[v_final]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-c:a", "aac", "-b:a", "192k", "-t", f"{dur_voz:.3f}", str(destino)])
-        subprocess.run(cmd, check=True, capture_output=True)
-        print(f"✅ Short Parte {short['parte']} completado.")
-
-    return True
+    destino = OUTPUT / "fortaleza_short.mp4"
+    cmd.extend(["-filter_complex", ";".join(filtros), "-map", "[v_final]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-c:a", "aac", "-b:a", "192k", "-t", f"{dur_voz:.3f}", str(destino)])
+    subprocess.run(cmd, check=True, capture_output=True)
+    print(f"✅ Short Parte {guion['parte']} generado.")
+    return str(destino)
 
 if __name__ == "__main__":
-    asyncio.run(crear_shorts())
+    asyncio.run(renderizar_short())
