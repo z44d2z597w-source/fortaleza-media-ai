@@ -7,14 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 import os
 
-# ==========================================================
-# FORTALEZA MEDIA AI 11.0
-# CEREBRO EDITORIAL: ESTRUCTURA PROFESIONAL Y COHERENTE
-# ==========================================================
-
 ARCHIVO_GUION = Path("guion.json")
 ARCHIVO_HISTORIAL = Path("historial_temas.json")
 
+# Historias de respaldo por si falla la IA
 HISTORIAS_RESPALDO = [
     {
         "titulo": "El secreto de la habitación 404",
@@ -40,44 +36,14 @@ def guardar_historial(historial):
     with open(ARCHIVO_HISTORIAL, "w", encoding="utf-8") as f:
         json.dump(historial, f, ensure_ascii=False, indent=4)
 
-def tema_ya_utilizado(titulo, historial):
-    for e in historial:
-        anterior = str(e.get("titulo", "") if isinstance(e, dict) else e).strip().lower()
-        if anterior == titulo.strip().lower():
-            return True
-    return False
-
-def generar_con_groq(prompt):
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        print("[GROQ] No hay GROQ_API_KEY configurada. Saltando...")
-        return None
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": "Eres un guionista experto en videos virales de YouTube Shorts. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 800
-    }
-    
-    try:
-        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-        respuesta.raise_for_status()
-        return respuesta.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(f"[GROQ] Error: {e}")
-        return None
-
 def generar_con_pollinations(prompt):
+    """Genera texto usando Pollinations (sin API key)."""
     prompt_encoded = urllib.parse.quote(prompt)
     url = f"https://text.pollinations.ai/{prompt_encoded}?model=openai"
     try:
-        respuesta = requests.get(url, timeout=60)
+        respuesta = requests.get(url, timeout=120)
         respuesta.raise_for_status()
+        print("[POLLINATIONS] Guion generado con éxito.")
         return respuesta.text.strip()
     except Exception as e:
         print(f"[POLLINATIONS] Error: {e}")
@@ -112,17 +78,6 @@ def estructurar_guion(texto_ia, titulo):
     }
 
 def crear_guion():
-    try:
-        from pytrends.request import TrendReq
-        print("[TENDENCIAS] Consultando Google Trends...")
-        pytrends = TrendReq(hl='es-MX', tz=-360)
-        trending = pytrends.trending_searches(pn='mexico')[0].tolist()
-        historial = cargar_historial()
-        tendencias_nuevas = [t for t in trending if not tema_ya_utilizado(t, historial)][:3]
-    except Exception as e:
-        print(f"[TENDENCIAS] No disponible: {e}")
-        tendencias_nuevas = []
-
     prompt_base = (
         "Escribe un guion para un video vertical de YouTube Shorts sobre {tema}. "
         "La historia debe tener exactamente esta estructura de 5 escenas, separadas por saltos de línea: "
@@ -134,21 +89,20 @@ def crear_guion():
         "Usa un tono dramático y directo. No incluyas títulos de escena, solo el texto narrado. No uses comillas."
     )
 
-    for tema in tendencias_nuevas:
-        prompt = prompt_base.format(tema=tema)
-        texto_ia = generar_con_groq(prompt) or generar_con_pollinations(prompt)
-        if texto_ia:
-            guion = estructurar_guion(texto_ia, f"TENDENCIA: {tema[:40]}")
-            if guion: return guion
+    temas_drama = [
+        "una traición familiar", "un secreto de pareja", "un misterio en el trabajo",
+        "una desaparición inexplicable", "una herencia maldita", "un mensaje de texto escalofriante"
+    ]
+    random.shuffle(temas_drama)
 
-    temas_drama = ["una traición familiar", "un secreto de pareja", "un misterio en el trabajo", "una desaparición inexplicable"]
-    tema_aleatorio = random.choice(temas_drama)
-    prompt = prompt_base.format(tema=tema_aleatorio)
-    texto_ia = generar_con_groq(prompt) or generar_con_pollinations(prompt)
-    
-    if texto_ia:
-        guion = estructurar_guion(texto_ia, f"El misterio de {tema_aleatorio}")
-        if guion: return guion
+    for tema in temas_drama:
+        print(f"[EDITORIAL] Generando historia sobre: {tema}")
+        prompt = prompt_base.format(tema=tema)
+        texto_ia = generar_con_pollinations(prompt)
+        
+        if texto_ia:
+            guion = estructurar_guion(texto_ia, f"El misterio de {tema}")
+            if guion: return guion
 
     print("[EDITORIAL] APIs fallaron. Usando respaldo.")
     historia = random.choice(HISTORIAS_RESPALDO)
