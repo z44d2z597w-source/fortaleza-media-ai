@@ -1,5 +1,4 @@
 name: FORTALEZA MEDIA AI
-
 on:
   workflow_dispatch:
     inputs:
@@ -37,16 +36,16 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
-      - name: Guardar memoria
+      - name: Guardar memoria creativa e historial
         if: always()
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          [ -f historial_creativo.json ] && git add historial_creativo.json
           [ -f historial_temas.json ] && git add historial_temas.json
-          [ -f config_edicion.json ] && git add config_edicion.json
           git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Auto-mejora [skip ci]"
+          git commit -m "Auto-mejora: Historial creativo actualizado [skip ci]"
           git push
 
       - name: Preparar metadatos
@@ -56,11 +55,10 @@ jobs:
           with open("guion.json", encoding="utf-8") as f: g = json.load(f)
           titulo = " ".join(g["titulo"].split())[:100]
           
-          # LEEMOS EL NUEVO STORYBOARD DEL DIRECTOR
           storyboard = g.get("director_notes", {}).get("storyboard", [])
           texto_narracion = " ".join(beat["narracion"] for beat in storyboard)
           
-          desc = texto_narracion[:5000] + " #Shorts #Viral #Misterio"
+          desc = texto_narracion[:5000] + " #Shorts #Viral #Misterio #Historias"
           delim = "FORTALEZA_" + str(os.getpid())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
               f.write(f"VIDEO_TITLE<<{delim}\n{titulo}\n{delim}\n")
@@ -76,7 +74,7 @@ jobs:
             output/fortaleza_short.mp4
           retention-days: 7
 
-      - name: Publicar en YouTube
+      - name: Publicar en YouTube vía Cloudflare Worker
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publicar == 'true')
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
@@ -88,7 +86,13 @@ jobs:
           [ -z "$FORTALEZA_UPLOAD_KEY" ] && echo "Falta FORTALEZA_UPLOAD_KEY" && exit 1
           SIZE=$(stat -c%s "$VIDEO")
           [ "$SIZE" -gt 94371840 ] && echo "Video > 90MB" && exit 1
+          
+          echo "Subiendo $VIDEO a YouTube..."
           curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
-            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
-            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
+            -H "Content-Type: video/mp4" \
+            -H "X-Video-Title: ${VIDEO_TITLE}" \
+            -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
             --data-binary "@${VIDEO}"
+          
+          echo "✅ Publicación completada."
