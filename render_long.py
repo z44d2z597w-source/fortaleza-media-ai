@@ -44,31 +44,32 @@ def obtener_duracion(ffmpeg, archivo):
     if not m: raise RuntimeError(f"Error de duración: {archivo}")
     h, mi, s = m.groups(); return int(h)*3600 + int(mi)*60 + float(s)
 
-def obtener_video_fondo(ffmpeg):
+def generar_imagen_ia(prompt, seed):
+    try:
+        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1080&height=1920&nologo=true&seed={seed}"
+        resp = requests.get(url, timeout=45)
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        ruta = RECURSOS / f"img_long_{seed}.jpg"
+        img.save(ruta)
+        return str(ruta)
+    except Exception: return None
+
+def obtener_video_fondo():
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if pixabay_key:
         try:
-            query = random.choice(["gameplay", "nature loop", "abstract background"])
+            query = random.choice(["nature loop", "abstract background", "cinematic landscape"])
             resp = requests.get("https://pixabay.com/api/videos/", params={"key": pixabay_key, "q": query, "orientation": "vertical", "per_page": 3}, timeout=15).json()
             for hit in resp.get("hits", []):
                 url = hit.get("videos", {}).get("large", {}).get("url") or hit.get("videos", {}).get("medium", {}).get("url")
                 if url:
-                    ruta = RECURSOS / "fondo_largo.mp4"
+                    ruta = RECURSOS / "fondo_long.mp4"
                     with requests.get(url, stream=True, timeout=20) as r:
                         with open(ruta, "wb") as f:
                             for chunk in r.iter_content(8192): f.write(chunk)
-                    if os.path.getsize(ruta) > 50000:
-                        print("[FONDO] Video de fondo obtenido.")
-                        return str(ruta)
+                    if os.path.getsize(ruta) > 50000: return str(ruta)
         except Exception: pass
-
-    print("[FONDO] Usando gradiente de emergencia.")
-    img = ImageOps.colorize(Image.linear_gradient("L").resize((FORMATO["ancho"], FORMATO["alto"])), black="#071426", white="#123D60").convert("RGB")
-    ruta = RECURSOS / "fondo_emergencia.jpg"
-    img.save(ruta)
-    video_path = RECURSOS / "fondo_largo.mp4"
-    subprocess.run([ffmpeg, "-y", "-loop", "1", "-i", str(ruta), "-c:v", "libx264", "-t", "3600", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_path)], check=True, capture_output=True)
-    return str(video_path)
+    return None
 
 async def generar_voz(texto, ruta, voz_elegida):
     for voz in [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]:
@@ -84,9 +85,10 @@ async def generar_voz(texto, ruta, voz_elegida):
                 with open(ruta, "wb") as f: f.write(audio)
                 return marcas
         except Exception: pass
-    raise RuntimeError("Fallo total de audio.")
+    raise RuntimeError("Fallo de audio")
 
 def crear_subtitulos(marcas, dur_voz, idx_cap):
+    # Subtítulos más espaciados para lectura cómoda en video largo
     grupos, grupo = [], []
     for p in marcas:
         grupo.append(p)
@@ -120,21 +122,22 @@ async def crear_long():
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
     
     voz = guion.get("voz", "es-MX-DaliaNeural")
-    capitulos = guion.get("guion_largo", [])
+    storyboard = guion.get("director_notes", {}).get("storyboard", [])
     
-    if not capitulos:
-        print("[ERROR] No hay guion_largo.")
+    if not storyboard:
+        print("[ERROR] No hay storyboard.")
         return None
 
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe() # <--- AQUÍ OBTENEMOS LA RUTA CORRECTA
-    video_fondo = obtener_video_fondo(ffmpeg)
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    video_fondo = obtener_video_fondo()
     clips_capitulos = []
 
-    print(f"--- GENERANDO VIDEO LARGO: {guion['titulo']} ---")
+    print(f"--- GENERANDO VIDEO DOCUMENTAL: {guion['titulo']} ---")
     
-    for idx, cap in enumerate(capitulos):
-        print(f"\n[CAPÍTULO {idx+1}/{len(capitulos)}] {cap['titulo_capitulo']}")
-        narracion = cap["narracion"]
+    # En un video largo, cada "beat" del storyboard es un capítulo o sección
+    for idx, beat in enumerate(storyboard):
+        print(f"\n[CAPÍTULO {idx+1}/{len(storyboard)}]")
+        narracion = beat["narracion"]
         
         ruta_voz = RECURSOS / f"voz_cap_{idx}.mp3"
         marcas = await generar_voz(narracion, ruta_voz, voz)
@@ -142,20 +145,45 @@ async def crear_long():
         
         subtitulos = crear_subtitulos(marcas, dur_voz, idx)
         
-        cmd_comp = [ffmpeg, "-y", "-stream_loop", "-1", "-i", video_fondo, "-i", str(ruta_voz)]
-        for sub in subtitulos: cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
+        # Generar una imagen de impacto por capítulo para mantener el interés
+        img_impacto = generar_imagen_ia(beat["prompt_visual"], random.randint(1, 9999))
+        
+        cmd_comp = [ffmpeg, "-y"]
+        if video_fondo: cmd_comp.extend(["-stream_loop", "-1", "-i", video_fondo])
+        else: cmd_comp.extend(["-f", "lavfi", "-i", f"color=c=#0a0a1a:s={FORMATO['ancho']}x{FORMATO['alto']}:r={FPS}"])
+            
+        cmd_comp.extend(["-i", str(ruta_voz)])
+        
+        if img_impacto:
+            cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", img_impacto])
+            
+        for sub in subtitulos: 
+            cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
         
         filtros, actual, idx_f = [], "[0:v]", 2
+        filtros.append(f"{actual}eq=brightness=-0.1:saturation=1.2[bg]")
+        actual = "[bg]"
+        
+        if img_impacto:
+            # La imagen aparece de fondo durante todo el capítulo
+            filtros.append(f"[2:v]scale=1080:1920[img]")
+            filtros.append(f"{actual}[img]overlay=0:0:enable='between(t,0,{dur_voz})'[v_img]")
+            actual = "[v_img]"
+            offset = 1
+        else:
+            offset = 0
+            
         for sub in subtitulos:
-            filtros.append(f"{actual}[{idx_f}:v]overlay=0:0:enable='between(t\\,{sub['inicio']:.3f}\\,{sub['fin']:.3f})'[v{idx_f}]")
-            actual = f"[v{idx_f}]"; idx_f += 1
+            filtros.append(f"{actual}[{idx_f + offset}:v]overlay=0:0:enable='between(t\\,{sub['inicio']:.3f}\\,{sub['fin']:.3f})'[v_sub_{idx_f}]")
+            actual = f"[v_sub_{idx_f}]"; idx_f += 1
             
         if not filtros: filtros = ["[0:v]null[vfinal]"]; actual = "[vfinal]"
+        else: filtros.append(f"{actual}format=yuv420p[vfinal]")
         
         ruta_cap = RECURSOS / f"cap_{idx}.mp4"
         cmd_comp.extend([
             "-filter_complex", ";".join(filtros), 
-            "-map", actual, "-map", "1:a", 
+            "-map", "[vfinal]", "-map", "1:a", 
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26", "-pix_fmt", "yuv420p", 
             "-c:a", "aac", "-b:a", "128k", "-t", f"{dur_voz:.3f}", str(ruta_cap)
         ])
