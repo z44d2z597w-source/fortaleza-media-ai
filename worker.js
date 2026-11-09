@@ -22,20 +22,15 @@ export default {
 
     if (url.pathname === "/") {
       return reply(
-        "FORTALEZA MEDIA AI: servidor de autorización activo."
+        "FORTALEZA MEDIA AI: servidor de autorizacion activo."
       );
     }
 
     if (url.pathname === "/login") {
-      if (
-        !env.GOOGLE_CLIENT_ID ||
-        !env.GOOGLE_CLIENT_SECRET ||
-        !env.YOUTUBE_TOKENS
-      ) {
-        return reply(
-          "Falta configurar las credenciales o el almacenamiento KV.",
-          500
-        );
+      if (!env.GOOGLE_CLIENT_ID ||
+          !env.GOOGLE_CLIENT_SECRET ||
+          !env.YOUTUBE_TOKENS) {
+        return reply("Falta configurar las credenciales o KV.", 500);
       }
 
       const state = crypto.randomUUID();
@@ -50,14 +45,8 @@ export default {
         "https://accounts.google.com/o/oauth2/v2/auth"
       );
 
-      googleURL.searchParams.set(
-        "client_id",
-        env.GOOGLE_CLIENT_ID
-      );
-      googleURL.searchParams.set(
-        "redirect_uri",
-        REDIRECT_URI
-      );
+      googleURL.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
+      googleURL.searchParams.set("redirect_uri", REDIRECT_URI);
       googleURL.searchParams.set("response_type", "code");
       googleURL.searchParams.set(
         "scope",
@@ -81,10 +70,7 @@ export default {
       const error = url.searchParams.get("error");
 
       if (error) {
-        return reply(
-          "Google no completó la autorización: " + error,
-          400
-        );
+        return reply("Google no completó la autorización: " + error, 400);
       }
 
       const code = url.searchParams.get("code");
@@ -99,12 +85,7 @@ export default {
       const clearCookie =
         "fortaleza_oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/callback; Max-Age=0";
 
-      if (
-        !code ||
-        !state ||
-        !cookieState ||
-        state !== cookieState
-      ) {
+      if (!code || !state || state !== cookieState) {
         return reply(
           "Falló la validación de seguridad. Vuelve a iniciar desde /login.",
           400,
@@ -113,8 +94,7 @@ export default {
       }
 
       const stateKey = `oauth_state:${state}`;
-      const savedState =
-        await env.YOUTUBE_TOKENS.get(stateKey);
+      const savedState = await env.YOUTUBE_TOKENS.get(stateKey);
 
       if (!savedState) {
         return reply(
@@ -131,8 +111,7 @@ export default {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded"
           },
           body: new URLSearchParams({
             code,
@@ -148,10 +127,8 @@ export default {
 
       if (!tokenResponse.ok) {
         return reply(
-          "Google no pudo entregar los tokens. Detalle: " +
-            (tokens.error_description ||
-              tokens.error ||
-              "error desconocido"),
+          "Error de Google: " +
+            (tokens.error_description || tokens.error || "desconocido"),
           400,
           { "Set-Cookie": clearCookie }
         );
@@ -159,7 +136,7 @@ export default {
 
       if (!tokens.refresh_token) {
         return reply(
-          "Google no entregó un refresh token. Revisa el consentimiento OAuth e inténtalo nuevamente.",
+          "Google no entregó un refresh token. Revisa el consentimiento OAuth.",
           400,
           { "Set-Cookie": clearCookie }
         );
@@ -171,7 +148,7 @@ export default {
       );
 
       return reply(
-        "FORTALEZA MEDIA AI: autorización de YouTube completada. El token quedó guardado en almacenamiento privado.",
+        "FORTALEZA MEDIA AI: autorización de YouTube completada. Token guardado.",
         200,
         { "Set-Cookie": clearCookie }
       );
@@ -180,4 +157,3 @@ export default {
     return reply("Ruta no encontrada.", 404);
   }
 };
-
