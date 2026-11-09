@@ -3,41 +3,38 @@ import json
 import sys
 from pathlib import Path
 
-# Importamos los motores
+# Importamos los motores con mensajes de error claros
 try:
     from video_engine import guardar_guion
+except ImportError as e:
+    print(f"[ERROR FATAL] No se pudo importar 'guardar_guion' de video_engine.py. Detalle: {e}")
+    sys.exit(1)
+
+try:
     from render_video import crear_video
 except ImportError as e:
-    print(f"[ERROR] No se pudieron importar los motores: {e}")
+    print(f"[ERROR FATAL] No se pudo importar 'crear_video' de render_video.py. Detalle: {e}")
     sys.exit(1)
 
 ARCHIVO_GUION = Path("guion.json")
 CARPETA_OUTPUT = Path("output")
 ARCHIVO_PRODUCCION = CARPETA_OUTPUT / "produccion.json"
 
-# Límite de seguridad aumentado a 500 MB para no cortar producciones
+# Límite de seguridad aumentado a 500 MB
 MAX_MB = 500
 
-
 def validar_guion(guion):
-    """Valida que el guion tenga lo mínimo necesario para producir el video."""
     if not guion:
         raise ValueError("El guion está vacío.")
-
-    titulo = guion.get("titulo")
-    if not titulo or not str(titulo).strip():
+    if not guion.get("titulo") or not str(guion.get("titulo")).strip():
         raise ValueError("El guion no tiene un título válido.")
-
     escenas = guion.get("escenas", [])
     if not escenas:
         raise ValueError("El guion no contiene escenas.")
-
     for i, escena in enumerate(escenas):
         if not str(escena.get("narracion", "")).strip():
             raise ValueError(f"La escena {i+1} no tiene narración.")
-
     return True
-
 
 async def main():
     print("=" * 60)
@@ -54,7 +51,7 @@ async def main():
         print(f"\n[ERROR FATAL] Falló la generación del guion: {e}")
         sys.exit(1)
 
-    # 2. Validar el archivo generado
+    # 2. Validar
     print("\n[PASO 2] Validando guion generado...")
     if not ARCHIVO_GUION.exists():
         print(f"[ERROR FATAL] No se encontró {ARCHIVO_GUION}")
@@ -65,13 +62,13 @@ async def main():
             guion = json.load(f)
         validar_guion(guion)
         print(f"  -> Título: {guion['titulo']}")
-        print(f"  -> Formato: {guion.get('formato', 'desconocido')}")
+        print(f"  -> Formato: {guion.get('formato_legible', guion.get('formato', 'desconocido'))}")
         print(f"  -> Escenas: {len(guion['escenas'])}")
     except Exception as e:
         print(f"\n[ERROR FATAL] Guion inválido: {e}")
         sys.exit(1)
 
-    # 3. Renderizar el video
+    # 3. Renderizar
     print("\n[PASO 3] Renderizando video (esto puede tardar varios minutos)...")
     try:
         resultado = await crear_video()
@@ -79,23 +76,16 @@ async def main():
         print(f"\n[ERROR FATAL] Falló la renderización del video: {e}")
         sys.exit(1)
 
-    # 4. Localizar el archivo final
+    # 4. Verificar archivo final
     print("\n[PASO 4] Verificando archivo de salida...")
-    
-    # Extraer la ruta devuelta (puede ser str, Path o dict)
     ruta_video = None
     if isinstance(resultado, dict):
         ruta_video = resultado.get("archivo") or resultado.get("ruta")
     elif isinstance(resultado, (str, Path)):
         ruta_video = resultado
 
-    # Si el motor no devolvió ruta, buscamos las salidas conocidas
     if not ruta_video or not Path(ruta_video).exists():
-        opciones = [
-            CARPETA_OUTPUT / "fortaleza_final.mp4",
-            CARPETA_OUTPUT / "fortaleza_short.mp4",
-            CARPETA_OUTPUT / "fortaleza_largo.mp4",
-        ]
+        opciones = [CARPETA_OUTPUT / "fortaleza_final.mp4", CARPETA_OUTPUT / "fortaleza_short.mp4"]
         for opcion in opciones:
             if opcion.exists() and opcion.stat().st_size > 100_000:
                 ruta_video = opcion
@@ -110,21 +100,18 @@ async def main():
     tamano_mb = tamano_bytes / (1024 * 1024)
 
     if tamano_bytes < 100_000:
-        print(f"[ERROR FATAL] El archivo {ruta_video.name} está vacío o incompleto.")
+        print(f"[ERROR FATAL] El archivo {ruta_video.name} está vacío.")
         sys.exit(1)
 
     if tamano_mb > MAX_MB:
         print(f"[ERROR FATAL] El archivo pesa {tamano_mb:.2f} MB y supera el límite de {MAX_MB} MB.")
         sys.exit(1)
 
-    print(f"  -> Archivo verificado: {ruta_video}")
+    print(f"  -> Archivo verificado: {ruta_video.name}")
     print(f"  -> Tamaño: {tamano_mb:.2f} MB")
 
-    # 5. Registrar metadatos de producción
-    print("\n[PASO 5] Guardando metadatos de producción...")
+    # 5. Registrar metadatos
     from datetime import datetime, timezone
-    fecha_utc = datetime.now(timezone.utc).isoformat()
-
     metadata = {
         "estado": "completado",
         "titulo": guion["titulo"],
@@ -133,9 +120,8 @@ async def main():
         "formato": guion.get("formato", "vertical"),
         "escenas": len(guion["escenas"]),
         "archivo": ruta_video.name,
-        "ruta_completa": str(ruta_video),
         "tamano_mb": round(tamano_mb, 2),
-        "fecha_utc": fecha_utc,
+        "fecha_utc": datetime.now(timezone.utc).isoformat(),
         "publicado": False
     }
 
@@ -145,8 +131,6 @@ async def main():
     print("\n" + "=" * 60)
     print("✅ PRODUCCIÓN COMPLETADA CON ÉXITO")
     print("=" * 60)
-    print(f"Video listo: {ruta_video}")
-    print(f"Metadatos guardados en: {ARCHIVO_PRODUCCION}")
 
 
 if __name__ == "__main__":
