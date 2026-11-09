@@ -44,7 +44,6 @@ def obtener_duracion(ffmpeg, archivo):
     if not m: raise RuntimeError(f"Error de duración: {archivo}")
     h, mi, s = m.groups(); return int(h)*3600 + int(mi)*60 + float(s)
 
-# --- GENERADORES VISUALES ---
 def generar_imagen_ia(prompt, seed):
     try:
         url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1080&height=1920&nologo=true&seed={seed}"
@@ -72,11 +71,10 @@ def obtener_video_fondo():
         except Exception: pass
     return None
 
-# --- AUDIO ---
 async def generar_voz(texto, ruta, voz_elegida):
     for voz in [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]:
         try:
-            tts = edge_tts.Communicate(texto, voice=voz, rate="+10%") # Un poco más rápido para energía
+            tts = edge_tts.Communicate(texto, voice=voz, rate="+10%")
             audio, marcas = bytearray(), []
             async for f in tts.stream():
                 if f["type"] == "audio": audio.extend(f["data"])
@@ -102,10 +100,10 @@ def generar_whoosh(ruta):
         f.writeframes(datos.tobytes())
     return str(ruta)
 
-# --- TIPOGRAFÍA CINÉTICA (El secreto de la retención) ---
-def crear_subtitulos_cineticos(marcas, dur_voz):
+# --- SUBTÍTULOS CINÉTICOS (ASS con animaciones) ---
+def generar_ass_cinetico(marcas, dur_voz, ruta_ass):
+    # Agrupamos palabras de 2 en 2 para máxima velocidad
     grupos = []
-    # Agrupamos las palabras de 1 en 1 o de 2 en 2 para que aparezcan rápido
     grupo_actual = []
     for p in marcas:
         grupo_actual.append(p)
@@ -114,35 +112,37 @@ def crear_subtitulos_cineticos(marcas, dur_voz):
             grupo_actual = []
     if grupo_actual: grupos.append(grupo_actual)
 
-    imgs = []
+    header = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Kinetic, DejaVu Sans, 120, &H0000FFFF, &H000000FF, &H00000000, &H00000000, -1, 0, 0, 0, 100, 100, 0, 0, 1, 8, 0, 5, 10, 10, 0, 1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    lineas = []
     for i, g in enumerate(grupos):
         inicio = max(0, g[0]["inicio"])
         fin = min(dur_voz, g[-1]["fin"] + 0.1)
         if fin <= inicio: continue
-        
         texto = " ".join(x["texto"] for x in g).upper()
         
-        # Creamos una imagen para el texto con estilo (amarillo, negrita, borde negro)
-        img = Image.new("RGBA", (FORMATO["ancho"], FORMATO["alto"]), (0,0,0,0))
-        d = ImageDraw.Draw(img)
-        font = obtener_fuente(int(FORMATO["ancho"] * 0.08), True)
+        # Animación: Aparece desde abajo con rebote (Spring Bounce)
+        # \move(540,1100,540,960,0,300) -> Movimiento
+        # \t(0,150,\fscx110\fscy110)\t(150,300,\fscx100\fscy100) -> Escala
+        animacion = r"{\move(540,1200,540,960,0,250)\t(0,150,\fscx115\fscy115)\t(150,250,\fscx100\fscy100)}"
         
-        # Efecto de rebote (la primera imagen es más pequeña, la segunda normal)
-        if i % 2 == 0:
-            font = obtener_fuente(int(FORMATO["ancho"] * 0.06), True)
-        else:
-            font = obtener_fuente(int(FORMATO["ancho"] * 0.09), True)
-            
-        y = int(FORMATO["alto"] * 0.5) # En el centro de la pantalla
-        
-        # Sombra y borde para que resalte sobre el gameplay
-        d.text((FORMATO["ancho"]//2, y), texto, font=font, fill="black", anchor="mm", stroke_width=8, stroke_fill="black")
-        d.text((FORMATO["ancho"]//2, y), texto, font=font, fill="#FFD700", anchor="mm") # Amarillo
-        
-        ruta = RECURSOS / f"sub_cinetico_{i}.png"
-        img.save(ruta)
-        imgs.append({"archivo": str(ruta), "inicio": inicio, "fin": fin})
-    return imgs
+        lineas.append(f"Dialogue: 0,{inicio:.2f},{fin:.2f},Kinetic,,0,0,0,,{animacion}{texto}")
+
+    with open(ruta_ass, "w", encoding="utf-8") as f:
+        f.write(header + "\n".join(lineas))
+    return ruta_ass
 
 async def crear_short():
     preparar_entorno()
@@ -158,70 +158,48 @@ async def crear_short():
     marcas = await generar_voz(gancho, ruta_voz, voz)
     dur_voz = obtener_duracion(ffmpeg, ruta_voz)
     
-    # Generar Fondo y Whoosh
     video_fondo = obtener_video_fondo()
     whoosh_audio = generar_whoosh(RECURSOS / "whoosh.wav")
+    ruta_ass = generar_ass_cinetico(marcas, dur_voz, RECURSOS / "subs.ass")
     
-    # Generar Subtítulos Cinéticos
-    subtitulos = crear_subtitulos_cineticos(marcas, dur_voz)
-    
-    # Generar Imágenes de Impacto (una cada 3 cortes para cambiar el visual)
+    # Generar 3 imágenes de impacto para intercalar
+    storyboard = guion.get("director_notes", {}).get("storyboard", [])
     imagenes_ia = []
-    for i in range(0, len(subtitulos), 3):
-        img = generar_imagen_ia(gancho[:100], random.randint(1, 9999))
-        if img: imagenes_ia.append({"img": img, "start_idx": i})
-        
+    for i in range(3):
+        prompt = storyboard[i]["prompt_visual"] if i < len(storyboard) else gancho[:100]
+        img = generar_imagen_ia(prompt, random.randint(1, 9999))
+        if img: imagenes_ia.append(img)
+
     # --- COMPOSICIÓN DEL VIDEO ---
     cmd = [ffmpeg, "-y"]
-    
-    # Input 0: Fondo Gameplay (o gradiente si falla)
     if video_fondo: cmd.extend(["-stream_loop", "-1", "-i", video_fondo])
     else: cmd.extend(["-f", "lavfi", "-i", f"color=c=#071426:s={FORMATO['ancho']}x{FORMATO['alto']}:r={FPS}"])
         
-    # Input 1: Voz
     cmd.extend(["-i", str(ruta_voz)])
-    
-    # Input 2: Whoosh
     cmd.extend(["-i", whoosh_audio])
     
-    # Añadir Subtítulos e Imágenes como inputs
-    idx_input = 3
-    for sub in subtitulos:
-        cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
-        
-    for img_data in imagenes_ia:
-        cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", img_data["img"]])
+    for img in imagenes_ia:
+        cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", img])
 
-    # --- FILTROS ---
+    # Filtros: Fondo -> Imágenes IA -> Subtítulos ASS -> Barra
     filtros = []
+    filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.15:saturation=1.3[bg]")
     
-    # 1. Fondo
-    filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.2:saturation=1.5[bg]")
-    
-    # 2. Superponer Imágenes de Impacto (aparecen de fondo)
     actual = "[bg]"
-    img_input_start = idx_input + len(subtitulos)
-    for k, img_data in enumerate(imagenes_ia):
-        # La imagen aparece por 2 segundos
-        start_time = subtitulos[img_data["start_idx"]]["inicio"]
-        end_time = start_time + 2.0
-        filtros.append(f"[{img_input_start + k}:v]scale=1080:1920[img_{k}]")
-        filtros.append(f"{actual}[img_{k}]overlay=0:0:enable='between(t,{start_time:.2f},{end_time:.2f})'[v_img_{k}]")
+    for k, img in enumerate(imagenes_ia):
+        start = k * 2.0 # Aparecen cada 2 segundos
+        end = start + 2.0
+        filtros.append(f"[{3 + k}:v]scale=1080:1920[img_{k}]")
+        filtros.append(f"{actual}[img_{k}]overlay=0:0:enable='between(t,{start},{end})'[v_img_{k}]")
         actual = f"[v_img_{k}]"
-        
-    # 3. Superponer Subtítulos Cinéticos
-    for i, sub in enumerate(subtitulos):
-        filtros.append(f"{actual}[{idx_input + i}:v]overlay=0:0:enable='between(t\\,{sub['inicio']:.3f}\\,{sub['fin']:.3f})'[v_sub_{i}]")
-        actual = f"[v_sub_{i}]"
-        
-    # 4. Barra de Progreso
-    filtros.append(f"{actual}drawbox=x=0:y=h-10:w='iw*t/{dur_voz}':h=10:color=red@0.9:t=fill[v_final]")
-    
-    # 5. Audio (Voz + Whoosh en cada corte)
-    audio_filter = "[1:a]volume=1.0[voz];"
-    # Mezclar whoosh solo en los primeros 0.3 segundos de cada subtítulo
-    # (Esto es complejo en FFmpeg, así que lo hacemos simple: un whoosh general)
-    audio_filter += f"[2:a]volume=0.5[whoosh];[voz][whoosh]amix=inputs=2:duration=first[audio_final]"
+
+    # Quemar subtítulos ASS
+    filtros.append(f"{actual}ass={ruta_ass}[v_subs]")
+    # Barra de progreso
+    filtros.append(f"[v_subs]drawbox=x=0:y=h-10:w='iw*t/{dur_voz}':h=10:color=red@0.9:t=fill[v_final]")
+
+    # Audio: Voz + Whoosh
+    audio_filter = f"[1:a]volume=1.0[voz];[2:a]volume=0.5[whoosh];[voz][whoosh]amix=inputs=2:duration=first[audio_final]"
 
     destino = OUTPUT / "fortaleza_short.mp4"
     cmd.extend([
