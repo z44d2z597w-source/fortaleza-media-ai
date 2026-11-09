@@ -18,12 +18,17 @@ def validar_guion(guion):
     if not guion: raise ValueError("El guion está vacío.")
     if not guion.get("titulo"): raise ValueError("Falta el título.")
     if not guion.get("gancho_corto"): raise ValueError("Falta el gancho_corto.")
-    if not guion.get("guion_largo"): raise ValueError("Falta el guion_largo.")
+    
+    # VALIDACIÓN ACTUALIZADA: Buscamos en director_notes.storyboard
+    notas = guion.get("director_notes", {})
+    storyboard = notas.get("storyboard", [])
+    if not storyboard: raise ValueError("Falta el storyboard en director_notes.")
+    
     return True
 
 async def main():
     print("============================================================")
-    print("FORTALEZA MEDIA AI — CONTROLADOR DUAL (SHORT + LARGO)")
+    print("FORTALEZA MEDIA AI — CONTROLADOR DUAL")
     print("============================================================")
 
     CARPETA_OUTPUT.mkdir(exist_ok=True)
@@ -41,7 +46,7 @@ async def main():
             guion = json.load(f)
         validar_guion(guion)
         print(f"  -> Título: {guion['titulo']}")
-        print(f"  -> Capítulos: {len(guion['guion_largo'])}")
+        print(f"  -> Beats del storyboard: {len(guion['director_notes']['storyboard'])}")
     except Exception as e:
         print(f"[ERROR FATAL] Guion inválido: {e}")
         sys.exit(1)
