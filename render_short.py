@@ -100,9 +100,8 @@ def generar_whoosh(ruta):
         f.writeframes(datos.tobytes())
     return str(ruta)
 
-# --- SUBTÍTULOS CINÉTICOS (ASS con animaciones) ---
+# --- SUBTÍTULOS CINÉTICOS AVANZADOS (ASS con animaciones de rebote y escala) ---
 def generar_ass_cinetico(marcas, dur_voz, ruta_ass):
-    # Agrupamos palabras de 2 en 2 para máxima velocidad
     grupos = []
     grupo_actual = []
     for p in marcas:
@@ -133,9 +132,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if fin <= inicio: continue
         texto = " ".join(x["texto"] for x in g).upper()
         
-        # Animación: Aparece desde abajo con rebote (Spring Bounce)
-        # \move(540,1100,540,960,0,300) -> Movimiento
-        # \t(0,150,\fscx110\fscy110)\t(150,300,\fscx100\fscy100) -> Escala
+        # Animación: Aparece desde abajo con rebote (Spring Bounce) y escala
         animacion = r"{\move(540,1200,540,960,0,250)\t(0,150,\fscx115\fscy115)\t(150,250,\fscx100\fscy100)}"
         
         lineas.append(f"Dialogue: 0,{inicio:.2f},{fin:.2f},Kinetic,,0,0,0,,{animacion}{texto}")
@@ -162,7 +159,7 @@ async def crear_short():
     whoosh_audio = generar_whoosh(RECURSOS / "whoosh.wav")
     ruta_ass = generar_ass_cinetico(marcas, dur_voz, RECURSOS / "subs.ass")
     
-    # Generar 3 imágenes de impacto para intercalar
+    # Generar 3 imágenes de impacto para intercalar (Pattern Interrupts)
     storyboard = guion.get("director_notes", {}).get("storyboard", [])
     imagenes_ia = []
     for i in range(3):
@@ -181,7 +178,7 @@ async def crear_short():
     for img in imagenes_ia:
         cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", img])
 
-    # Filtros: Fondo -> Imágenes IA -> Subtítulos ASS -> Barra
+    # Filtros: Fondo -> Imágenes IA (con zoom) -> Subtítulos ASS -> Barra
     filtros = []
     filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.15:saturation=1.3[bg]")
     
@@ -189,16 +186,17 @@ async def crear_short():
     for k, img in enumerate(imagenes_ia):
         start = k * 2.0 # Aparecen cada 2 segundos
         end = start + 2.0
-        filtros.append(f"[{3 + k}:v]scale=1080:1920[img_{k}]")
+        # Añadir un ligero zoom a la imagen para que no se vea estática
+        filtros.append(f"[{3 + k}:v]scale=1080:1920,zoompan=z='min(zoom+0.001,1.2)':d=1:s=1080x1920:fps={FPS}[img_{k}]")
         filtros.append(f"{actual}[img_{k}]overlay=0:0:enable='between(t,{start},{end})'[v_img_{k}]")
         actual = f"[v_img_{k}]"
 
     # Quemar subtítulos ASS
     filtros.append(f"{actual}ass={ruta_ass}[v_subs]")
-    # Barra de progreso
+    # Barra de progreso (roja para urgencia)
     filtros.append(f"[v_subs]drawbox=x=0:y=h-10:w='iw*t/{dur_voz}':h=10:color=red@0.9:t=fill[v_final]")
 
-    # Audio: Voz + Whoosh
+    # Audio: Voz + Whoosh (pattern interrupt)
     audio_filter = f"[1:a]volume=1.0[voz];[2:a]volume=0.5[whoosh];[voz][whoosh]amix=inputs=2:duration=first[audio_final]"
 
     destino = OUTPUT / "fortaleza_short.mp4"
