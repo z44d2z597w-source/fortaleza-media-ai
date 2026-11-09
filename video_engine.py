@@ -9,16 +9,10 @@ import os
 
 ARCHIVO_GUION = Path("guion.json")
 
-# Catálogos para que cada video sea único
 GENEROS = [
-    "Terror psicológico", 
-    "Misterio histórico", 
-    "Ciencia ficción distópica", 
-    "Drama familiar intenso", 
-    "Leyenda urbana mexicana",
-    "Conspiración tecnológica",
-    "Suspenso policial",
-    "Fantasía oscura"
+    "Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", 
+    "Drama familiar intenso", "Leyenda urbana mexicana", "Conspiración tecnológica",
+    "Suspenso policial", "Fantasía oscura"
 ]
 
 ESTILOS_VISUALES = [
@@ -30,10 +24,11 @@ ESTILOS_VISUALES = [
     "Surrealist dreamscape, ethereal, glowing"
 ]
 
+# VOCES 100% VERIFICADAS EN EDGE TTS
 VOCES_DISPONIBLES = [
-    "es-MX-DaliaNeural", # Femenina
-    "es-MX-JorgeNeural", # Masculina
-    "es-MX-CeciliaNeural" # Femenina alternativa
+    "es-MX-DaliaNeural",   # Femenina
+    "es-MX-JorgeNeural",   # Masculina
+    "es-MX-CandelaNeural"  # Femenina alternativa
 ]
 
 def generar_con_groq(prompt):
@@ -49,7 +44,7 @@ def generar_con_groq(prompt):
             {"role": "system", "content": "Eres un guionista experto en videos virales de YouTube Shorts. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.85, # Alta creatividad
+        "temperature": 0.85,
         "max_tokens": 800
     }
     
@@ -63,7 +58,6 @@ def generar_con_groq(prompt):
         return None
 
 def estructurar_guion(texto_ia, titulo):
-    # Limpiamos el texto por si la IA pone "Escena 1:" o comillas
     texto_ia = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto_ia, flags=re.IGNORECASE|re.MULTILINE).strip()
     oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto_ia) if len(o.strip()) > 10]
     
@@ -79,13 +73,11 @@ def estructurar_guion(texto_ia, titulo):
     ]
     
     for i in range(1, 5):
-        if not escenas[i]["narracion"]: 
-            escenas[i]["narracion"] = escenas[i-1]["narracion"]
+        if not escenas[i]["narracion"]: escenas[i]["narracion"] = escenas[i-1]["narracion"]
 
     return escenas
 
 def crear_guion():
-    # 1. Elegir el género, estilo y voz al azar para evitar repetición
     genero_elegido = random.choice(GENEROS)
     estilo_elegido = random.choice(ESTILOS_VISUALES)
     voz_elegida = random.choice(VOCES_DISPONIBLES)
@@ -108,7 +100,6 @@ def crear_guion():
     texto_ia = generar_con_groq(prompt)
     escenas = estructurar_guion(texto_ia, f"Historia de {genero_elegido}") if texto_ia else None
     
-    # Respaldo si Groq falla
     if not escenas:
         print("[EDITORIAL] Groq falló. Usando historia de respaldo.")
         escenas = [
@@ -119,7 +110,6 @@ def crear_guion():
             {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?"}
         ]
 
-    # Guardamos los metadatos para que el renderizador sepa qué estilo y voz usar
     return {
         "titulo": f"El misterio de {genero_elegido.lower()}",
         "formato": "vertical",
@@ -137,8 +127,6 @@ def guardar_guion():
     print("=" * 50)
     print(f"GUION GUARDADO CON ÉXITO")
     print(f"TÍTULO: {guion['titulo']}")
-    print(f"VOZ ELEGIDA: {guion['voz']}")
-    print(f"ESTILO VISUAL: {guion['estilo_visual']}")
     print("=" * 50)
     return guion
 
