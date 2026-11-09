@@ -6,6 +6,7 @@ import random
 import re
 import shutil
 import subprocess
+import time
 import urllib.parse
 import wave
 from array import array
@@ -18,7 +19,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================================
-# FORTALEZA MEDIA AI 21.0 — EDICIÓN DINÁMICA Y ORIGINAL
+# FORTALEZA MEDIA AI 22.0 — CONECTADO A AGNES Y MAGIC HOUR
 # ==========================================================
 
 FPS = 30
@@ -56,17 +57,6 @@ def obtener_duracion(ffmpeg, archivo):
     h, mi, s = m.groups()
     return int(h) * 3600 + int(mi) * 60 + float(s)
 
-def dividir_texto(dibujo, texto, font, ancho_max):
-    lineas, actual = [], ""
-    for palabra in texto.split():
-        prueba = (actual + " " + palabra).strip()
-        if dibujo.textbbox((0, 0), prueba, font=font)[2] <= ancho_max: actual = prueba
-        else:
-            if actual: lineas.append(actual)
-            actual = palabra
-    if actual: lineas.append(actual)
-    return lineas
-
 def calcular_cortes(palabras, duracion_total):
     if duracion_total <= 0: return [0.0, duracion_total]
     puntos = []
@@ -80,7 +70,7 @@ def calcular_cortes(palabras, duracion_total):
     cortes = [0.0]
     for c in puntos:
         if c < 5.0:
-            if c - cortes[-1] >= 1.2: cortes.append(c) # Cortes ultrarrápidos al inicio
+            if c - cortes[-1] >= 1.2: cortes.append(c)
         else:
             if c - cortes[-1] >= CONFIG_DEFECTO["corte_min"] and duracion_total - c >= CONFIG_DEFECTO["corte_min"]: 
                 cortes.append(c)
@@ -94,23 +84,71 @@ def calcular_cortes(palabras, duracion_total):
     else: resultado[-1] = duracion_total
     return resultado
 
-def generar_imagen_ia(prompt, num_escena, num_toma, formato, estilo_visual):
-    print(f"[IA VISUAL] Generando imagen {num_escena}-{num_toma} estilo: {estilo_visual}...")
-    # Mezclamos el estilo visual elegido por el cerebro con la narración
-    prompt_completo = f"{estilo_visual}, vertical 9:16, {prompt}"
-    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt_completo)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
+# --- GENERADORES DE VIDEO IA ---
+
+def generar_video_agnes(prompt, duracion):
+    api_key = os.environ.get("AGNES_API_KEY")
+    if not api_key: return None
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": "agnes-video-v2.0", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
+    try:
+        resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=60)
+        task_id = resp.json().get("id") or resp.json().get("task_id")
+        if not task_id: return None
+        
+        for _ in range(60):
+            time.sleep(10)
+            poll = requests.get(f"https://apihub.agnes-ai.cn/v1/video/generations/{task_id}", headers=headers).json()
+            if poll.get("status") == "succeeded":
+                url = poll.get("output", {}).get("video_url")
+                if url:
+                    ruta = RECURSOS / f"agnes_{task_id}.mp4"
+                    with requests.get(url, stream=True, timeout=120) as r:
+                        r.raise_for_status()
+                        with open(ruta, "wb") as f:
+                            for chunk in r.iter_content(8192): f.write(chunk)
+                    print("[AGNES] Video descargado con éxito.")
+                    return str(ruta)
+            elif poll.get("status") == "failed": return None
+    except Exception as e:
+        print(f"[AGNES] Error: {e}")
+        return None
+
+def generar_video_magichour(prompt, duracion):
+    api_key = os.environ.get("MAGIC_HOUR_API_KEY")
+    if not api_key: return None
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
+    try:
+        resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        video_url = resp.json().get("video_url")
+        if video_url:
+            ruta = RECURSOS / f"magichour_{int(time.time())}.mp4"
+            with requests.get(video_url, stream=True, timeout=120) as r:
+                r.raise_for_status()
+                with open(ruta, "wb") as f:
+                    for chunk in r.iter_content(8192): f.write(chunk)
+            print("[MAGIC HOUR] Video descargado con éxito.")
+            return str(ruta)
+    except Exception as e:
+        print(f"[MAGIC HOUR] Error: {e}")
+        return None
+
+def generar_imagen_pollinations(prompt, num_escena, num_toma, formato):
+    url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
     try:
         resp = requests.get(url, timeout=60)
         ruta = RECURSOS / f"ia_{num_escena:02d}_{num_toma:02d}.jpg"
         with open(ruta, "wb") as f: f.write(resp.content)
         Image.open(ruta).verify()
+        print("[POLLINATIONS] Imagen de respaldo generada.")
         return str(ruta)
     except Exception as e:
-        print(f"[IA VISUAL] Error: {e}")
+        print(f"[POLLINATIONS] Error: {e}")
         return None
 
 async def generar_voz(texto, ruta, voz_elegida):
-    print(f"[VOZ] Generando audio con: {voz_elegida}")
     tts = edge_tts.Communicate(texto, voice=voz_elegida, rate="+8%")
     audio, marcas = bytearray(), []
     async for f in tts.stream():
@@ -159,42 +197,32 @@ def crear_scroll_stopper(formato):
     img.save(ruta)
     return str(ruta)
 
-def crear_toma(ffmpeg, ruta_img, destino, duracion, idx, formato, es_impacto):
+def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_video):
     ancho, alto = formato["ancho"], formato["alto"]
     
-    # 10 Movimientos de cámara para que NUNCA se vea estático
-    movimientos = [
-        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"), # Zoom In
-        ("min(zoom+0.0025,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"), # Zoom + Paneo Der
-        ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"), # Zoom Out + Paneo Izq
-        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)+on*0.15"), # Zoom + Paneo Abajo
-        ("min(zoom+0.0020,1.35)", "iw/2-(iw/zoom/2)+on*0.20", "ih/2-(ih/zoom/2)"), # Paneo Rápido Der
-        ("max(zoom-0.0015,1.0)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)-on*0.15"), # Zoom Out + Paneo Arriba
-        ("min(zoom+0.0012,1.25)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)-on*0.10"), # Diagonal
-        ("min(zoom+0.0030,1.5)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"), # Zoom Rápido
-    ]
-    zoom, x, y = movimientos[idx % len(movimientos)]
-
-    if es_impacto:
-        # Efecto de golpe visual (Zoom punch)
-        zoompan = f"zoompan=z='if(lt(on,15),1.6-on/25,1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={FPS}"
+    if es_video:
+        # Si es un video real de Agnes/Magic Hour, solo lo recortamos y ajustamos
+        filtros = [f"scale={ancho}:{alto}:force_original_aspect_ratio=increase", f"crop={ancho}:{alto}", "setsar=1", "format=yuv420p"]
+        cmd = [ffmpeg, "-y", "-stream_loop", "-1", "-i", ruta_recurso, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
     else:
+        # Si es imagen de Pollinations, le aplicamos zoom y movimientos
+        movimientos = [
+            ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
+            ("min(zoom+0.0025,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
+            ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"),
+        ]
+        zoom, x, y = movimientos[idx % len(movimientos)]
         zoompan = f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}"
-
-    filtros = [
-        f"scale={int(ancho*1.3)}:{int(alto*1.3)}:force_original_aspect_ratio=increase",
-        f"crop={int(ancho*1.3)}:{int(alto*1.3)}",
-        zoompan,
-        "eq=contrast=1.15:brightness=-0.02:saturation=1.25",
-        "unsharp=5:5:0.8:5:5:0.0"
-    ]
-    
-    if es_impacto:
-        filtros.append("rgbashift=rh=10:bh=-10:enable='lt(t,0.25)'")
         
-    filtros.extend(["setsar=1", "format=yuv420p"])
-    
-    cmd = [ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", ruta_img, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-r", str(FPS), str(destino)]
+        filtros = [
+            f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase",
+            f"crop={int(ancho*1.2)}:{int(alto*1.2)}",
+            zoompan,
+            "eq=contrast=1.15:saturation=1.25",
+            "setsar=1", "format=yuv420p"
+        ]
+        cmd = [ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", ruta_recurso, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
+        
     ejecutar_ffmpeg(cmd)
 
 def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
@@ -220,8 +248,8 @@ async def crear_video():
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
     
     titulo = str(guion.get("titulo", "Viral"))
-    voz_elegida = str(guion.get("voz", "es-MX-DaliaNeural")) # Leemos la voz
-    estilo_visual = str(guion.get("estilo_visual", "Cinematic 8k")) # Leemos el estilo
+    voz_elegida = str(guion.get("voz", "es-MX-DaliaNeural"))
+    estilo_visual = str(guion.get("estilo_visual", "Cinematic 8k"))
     
     escenas = [e for e in guion.get("escenas", []) if str(e.get("narracion", "")).strip()][:MAX_ESCENAS]
     formato = {"nombre": "vertical", "ancho": 1080, "alto": 1920}
@@ -232,7 +260,7 @@ async def crear_video():
     scroll = crear_scroll_stopper(formato)
 
     print("============================================================")
-    print(f"FORTALEZA MEDIA AI 21.0 — PRODUCIENDO: {titulo}")
+    print(f"FORTALEZA MEDIA AI 22.0 — PRODUCIENDO: {titulo}")
     print(f"VOZ: {voz_elegida} | ESTILO: {estilo_visual}")
     print("============================================================")
 
@@ -253,11 +281,25 @@ async def crear_video():
             if dur <= 0.4: continue
             
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
+            prompt = f"{estilo_visual}, vertical 9:16, {narracion[:120]}"
             
-            # Generamos imagen IA con el estilo elegido
-            img_ia = generar_imagen_ia(narracion[:120], num_escena, i, formato, estilo_visual)
-            if img_ia:
-                crear_toma(ffmpeg, img_ia, ruta_toma, dur, num_escena*10+i, formato, (i==0))
+            # 1. Intentar con Agnes
+            video_ia = generar_video_agnes(prompt, dur)
+            es_video = True
+            
+            # 2. Si falla, intentar con Magic Hour
+            if not video_ia:
+                print("[RESPALDO] Agnes falló. Intentando Magic Hour...")
+                video_ia = generar_video_magichour(prompt, dur)
+            
+            # 3. Si ambos fallan, generar imagen con Pollinations
+            if not video_ia:
+                print("[RESPALDO] Magic Hour falló. Generando imagen...")
+                video_ia = generar_imagen_pollinations(prompt, num_escena, i, formato)
+                es_video = False
+                
+            if video_ia:
+                crear_toma_visual(ffmpeg, video_ia, ruta_toma, dur, num_escena*10+i, formato, es_video)
                 tomas_mp4.append(str(ruta_toma))
 
         ruta_visual = RECURSOS / f"vis_{num_escena:02d}.mp4"
@@ -303,9 +345,7 @@ async def crear_video():
     mezcla_final(ffmpeg, str(video_unido), musica, whooshes, str(destino), dur_total)
     shutil.copy2(destino, OUTPUT / "fortaleza_short.mp4")
     
-    print("\n============================================================")
-    print("✅ PRODUCCIÓN 21.0 COMPLETADA CON ÉXITO")
-    print("============================================================")
+    print("\n✅ PRODUCCIÓN COMPLETADA")
     return str(destino)
 
 if __name__ == "__main__":
