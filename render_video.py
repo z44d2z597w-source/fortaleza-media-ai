@@ -21,8 +21,8 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.4
-# CORRECCIÓN: COMAS ESCAPADAS EN enable + FRAMERATE EN PNG
+# FORTALEZA MEDIA AI 10.5
+# CORRECCIÓN FINAL: FORZAR FORMATO YUV420P EN OVERLAYS
 # ==========================================================
 
 FPS = 30
@@ -48,7 +48,7 @@ PALABRAS_IMPACTO = [
     "asombroso", "oculto", "verdad", "ciencia", "descubrimiento"
 ]
 
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.4"}
+CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.5"}
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -431,7 +431,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.4\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.5\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -521,10 +521,12 @@ async def crear_video():
             filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t\\,{txt['inicio']:.3f}\\,{txt['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
-        if not filtros: filtros = ["[0:v]null[vfinal]"]; actual = "[vfinal]"
+        # Forzar salida a yuv420p
+        if not filtros: 
+            filtros = ["[0:v]format=yuv420p[vfinal]"]
         else: 
-            filtros[-1] = filtros[-1].replace(f"[v{idx_entrada-1}]", "[vfinal]")
-            actual = "[vfinal]"
+            filtros.append(f"{actual}format=yuv420p[vfinal]")
+        actual = "[vfinal]"
 
         escena_final = RECURSOS / f"escena_final_{numero:02d}.mp4"
         cmd.extend(["-filter_complex", ";".join(filtros), "-map", actual, "-map", "1:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", "-t", f"{duracion:.3f}", "-f", "mp4", str(escena_final)])
