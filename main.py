@@ -12,7 +12,7 @@ async def main():
     try:
         guardar_guion()
         await crear_shorts()
-        # await crear_long() # (Lo activamos cuando quieras el video de 40 min)
+        # await crear_long() # (Opcional: activar cuando quieras el video largo)
         print("\n✅ PROCESO COMPLETADO")
     except Exception as e:
         print(f"[ERROR] {e}"); sys.exit(1)
