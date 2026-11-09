@@ -2,18 +2,19 @@
     "corte_min": 1.6,
     "corte_max": 4.0,
     "zoom_intensidad": 0.0015,
-    "score_global": 60,
-    "score_pacing": 50,
-    "score_visual": 60,
+    "score_global": 73,
+    "score_pacing": 85,
+    "score_visual": 80,
     "score_audio": 80,
     "score_texto": 50,
-    "intentos": 6,
+    "intentos": 7,
     "historial_scores": [
         73,
         73,
         73,
         73,
         73,
-        60
+        60,
+        73
     ]
 }
