@@ -2,6 +2,8 @@ name: FORTALEZA MEDIA AI
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 15 * * *'
 
 jobs:
   producir:
@@ -22,7 +24,7 @@ jobs:
       - name: Generar video
         run: python main.py
 
-      - name: Guardar video terminado
+      - name: Guardar video
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
