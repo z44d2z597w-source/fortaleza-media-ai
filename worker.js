@@ -12,6 +12,19 @@ function reply(message, status = 200, headers = {}) {
   });
 }
 
+function getConfig(env) {
+  return {
+    clientId:
+      typeof env.GOOGLE_CLIENT_ID === "string"
+        ? env.GOOGLE_CLIENT_ID.trim()
+        : "",
+    clientSecret:
+      typeof env.GOOGLE_CLIENT_SECRET === "string"
+        ? env.GOOGLE_CLIENT_SECRET.trim()
+        : ""
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -20,17 +33,49 @@ export default {
       return reply("Método no permitido.", 405);
     }
 
+    const { clientId, clientSecret } = getConfig(env);
+
+    // Página principal
     if (url.pathname === "/") {
       return reply(
         "FORTALEZA MEDIA AI: servidor de autorizacion activo."
       );
     }
 
+    // Diagnóstico seguro: nunca muestra el secreto
+    if (url.pathname === "/diagnostico") {
+      return new Response(
+        JSON.stringify(
+          {
+            worker: "FORTALEZA MEDIA AI",
+            client_id: clientId,
+            client_id_configured: Boolean(clientId),
+            client_id_length: clientId.length,
+            client_id_format:
+              clientId.endsWith(".apps.googleusercontent.com"),
+            client_secret_configured: Boolean(clientSecret),
+            kv_configured: Boolean(env.YOUTUBE_TOKENS),
+            redirect_uri: REDIRECT_URI
+          },
+          null,
+          2
+        ),
+        {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
+    // Inicio de autorización de Google
     if (url.pathname === "/login") {
-      if (!env.GOOGLE_CLIENT_ID ||
-          !env.GOOGLE_CLIENT_SECRET ||
-          !env.YOUTUBE_TOKENS) {
-        return reply("Falta configurar las credenciales o KV.", 500);
+      if (!clientId || !clientSecret || !env.YOUTUBE_TOKENS) {
+        return reply(
+          "Falta configurar GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET o YOUTUBE_TOKENS.",
+          500
+        );
       }
 
       const state = crypto.randomUUID();
@@ -45,7 +90,7 @@ export default {
         "https://accounts.google.com/o/oauth2/v2/auth"
       );
 
-      googleURL.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
+      googleURL.searchParams.set("client_id", clientId);
       googleURL.searchParams.set("redirect_uri", REDIRECT_URI);
       googleURL.searchParams.set("response_type", "code");
       googleURL.searchParams.set(
@@ -66,11 +111,15 @@ export default {
       });
     }
 
+    // Respuesta de Google
     if (url.pathname === "/callback") {
       const error = url.searchParams.get("error");
 
       if (error) {
-        return reply("Google no completó la autorización: " + error, 400);
+        return reply(
+          "Google no completó la autorización: " + error,
+          400
+        );
       }
 
       const code = url.searchParams.get("code");
@@ -80,6 +129,7 @@ export default {
       const match = cookie.match(
         /(?:^|;\s*)fortaleza_oauth_state=([^;]+)/
       );
+
       const cookieState = match ? match[1] : "";
 
       const clearCookie =
@@ -89,6 +139,14 @@ export default {
         return reply(
           "Falló la validación de seguridad. Vuelve a iniciar desde /login.",
           400,
+          { "Set-Cookie": clearCookie }
+        );
+      }
+
+      if (!clientId || !clientSecret || !env.YOUTUBE_TOKENS) {
+        return reply(
+          "Falta configurar las credenciales o KV.",
+          500,
           { "Set-Cookie": clearCookie }
         );
       }
@@ -115,15 +173,25 @@ export default {
           },
           body: new URLSearchParams({
             code,
-            client_id: env.GOOGLE_CLIENT_ID,
-            client_secret: env.GOOGLE_CLIENT_SECRET,
+            client_id: clientId,
+            client_secret: clientSecret,
             redirect_uri: REDIRECT_URI,
             grant_type: "authorization_code"
           })
         }
       );
 
-      const tokens = await tokenResponse.json();
+      let tokens;
+
+      try {
+        tokens = await tokenResponse.json();
+      } catch {
+        return reply(
+          "Google devolvió una respuesta que no se pudo interpretar.",
+          502,
+          { "Set-Cookie": clearCookie }
+        );
+      }
 
       if (!tokenResponse.ok) {
         return reply(
