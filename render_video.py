@@ -7,7 +7,7 @@ import random
 import re
 import shutil
 import subprocess
-import time
+import urllib.parse
 import wave
 from array import array
 from io import BytesIO
@@ -22,8 +22,8 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 11.0
-# GENERACIÓN DE VIDEO POR IA (MAGIC HOUR) COMO RESPALDO
+# FORTALEZA MEDIA AI 11.1
+# RESPALDO DEFINITIVO: IA GRATUITA (POLLINATIONS)
 # ==========================================================
 
 FPS = 30
@@ -50,7 +50,7 @@ PALABRAS_IMPACTO = [
 ]
 
 CABECERAS = {
-    "User-Agent": "FortalezaMediaAI/11.0 (https://github.com/z44d2z597w-source/fortaleza-media-ai) python-requests"
+    "User-Agent": "FortalezaMediaAI/11.1 (https://github.com/z44d2z597w-source/fortaleza-media-ai) python-requests"
 }
 
 PALETAS = [
@@ -179,6 +179,8 @@ def seleccionar_formato(guion):
 def crear_busqueda(titulo, narracion):
     palabras = re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}", titulo + " " + narracion)
     resultado = [p for p in palabras if p.lower() not in STOPWORDS]
+    # Si la búsqueda queda vacía, usar el título por defecto
+    if not resultado: return titulo[:20]
     return " ".join(list(dict.fromkeys(resultado))[:4])
 
 def buscar_clips(titulo, narracion, numero, formato):
@@ -237,52 +239,28 @@ def buscar_fotografias(titulo, narracion, numero):
     return resultados
 
 # ==========================================================
-# GENERACIÓN DE VIDEO CON IA (MAGIC HOUR)
+# GENERACIÓN DE IMAGEN CON IA GRATUITA (POLLINATIONS)
 # ==========================================================
 
-def generar_video_ia(prompt, numero, formato, duracion_sugerida=4):
-    """Llama a Magic Hour para generar un video corto a partir de un prompt."""
-    api_key = os.environ.get("MAGIC_HOUR_API_KEY")
-    if not api_key:
-        print("[IA] No hay MAGIC_HOUR_API_KEY. Saltando generación por IA.")
-        return None
-
-    # Magic Hour usa la API en https://api.magichour.ai/v1
-    # El SDK de Python es más sencillo, pero aquí usamos requests directos.
-    url = "https://api.magichour.ai/v1/text-to-video"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    # Ajustar prompt y parámetros según el formato
-    payload = {
-        "prompt": prompt,
-        "model": "wan-2.2",  # Modelo gratuito según docs
-        "duration_seconds": min(duracion_sugerida, 5), # Límite para ahorrar créditos
-        "resolution": "480p",
-        "aspect_ratio": "9:16" if formato["nombre"] == "vertical" else "16:9"
-    }
-
-    print(f"[IA] Generando video con Magic Hour: {prompt[:60]}...")
+def generar_imagen_ia_gratis(prompt, numero, formato):
+    """Genera una imagen con Pollinations.ai (No requiere API Key)"""
+    prompt_encoded = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{prompt_encoded}?width={formato['ancho']}&height={formato['alto']}&nologo=true&enhance=true"
+    
+    print(f"[IA] Generando imagen con Pollinations: {prompt[:50]}...")
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
-        video_url = data.get("video_url")
-        if not video_url:
-            print("[IA] Magic Hour no devolvió video_url:", data)
-            return None
-        # Descargar el video generado
-        ruta = RECURSOS / f"ia_{numero:02d}.mp4"
-        with requests.get(video_url, stream=True, timeout=60) as r:
-            r.raise_for_status()
-            with open(ruta, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        print(f"[IA] Video IA guardado en {ruta}")
+        respuesta = requests.get(url, timeout=60)
+        respuesta.raise_for_status()
+        
+        ruta = RECURSOS / f"ia_img_{numero:02d}.jpg"
+        with open(ruta, "wb") as f:
+            f.write(respuesta.content)
+            
+        # Verificar que la imagen no esté corrupta
+        Image.open(ruta).verify()
         return str(ruta)
     except Exception as e:
-        print("[IA] Error al generar video con Magic Hour:", e)
+        print(f"[IA] Error Pollinations: {e}")
         return None
 
 # ==========================================================
@@ -479,7 +457,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 11.0 (IA GENERATIVA)\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 11.1 (IA POLLINATIONS)\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -499,13 +477,14 @@ async def crear_video():
         if len(recursos) < num_tomas:
             recursos.extend([f["archivo"] for f in buscar_fotografias(titulo, narracion, numero)])
         
-        # 3. Si no hay material, generar con IA
+        # 3. Si no hay material, generar con IA (Pollinations)
         if not recursos:
-            print("[IA] Sin material de stock. Llamando a Magic Hour...")
-            prompt = f"Cinematic {formato['nombre']} footage representing: {narracion[:150]}"
-            video_ia = generar_video_ia(prompt, numero, formato, duracion_sugerida=int(min(duracion, 5)))
-            if video_ia:
-                recursos = [video_ia]
+            print("[IA] Sin material de stock. Llamando a Pollinations...")
+            # Prompt en inglés para mejores resultados en la IA
+            prompt = f"Cinematic, highly detailed, dramatic lighting, {narracion[:150]}"
+            img_ia = generar_imagen_ia_gratis(prompt, numero, formato)
+            if img_ia:
+                recursos = [img_ia]
             else:
                 # 4. Último recurso: fondo de gradiente
                 print("[AVISO] IA no disponible. Usando fondo de gradiente.")
