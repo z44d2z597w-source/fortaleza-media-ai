@@ -7,8 +7,9 @@
     "score_visual": 80,
     "score_audio": 100,
     "score_texto": 50,
-    "intentos": 1,
+    "intentos": 2,
     "historial_scores": [
+        73,
         73
     ]
 }
