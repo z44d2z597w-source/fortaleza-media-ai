@@ -17,7 +17,7 @@ def generar_con_groq(prompt):
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [
-            {"role": "system", "content": "Eres un director de cine de élite especializado en contenido viral para TikTok y YouTube. Creas storyboards con coherencia visual absoluta."},
+            {"role": "system", "content": "Eres un director de cine de élite. Creas storyboards con coherencia visual absoluta y guiones diseñados para maximizar la retención."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.8,
@@ -36,19 +36,18 @@ def crear_plan_de_produccion():
     voz = random.choice(VOCES)
     print(f"[DIRECTOR] Creando obra maestra: {genero} | Voz: {voz}")
 
-    # El prompt ahora exige un "Character Sheet" y un storyboard dual
     prompt = f"""
     Actúa como un director de cine. Crea un plan de producción para un video vertical (9:16) del género '{genero}'.
     
-    REGLAS DE COHERENCIA:
-    1. Define un PERSONAJE PRINCIPAL con características físicas inmutables (edad, ropa, rasgos).
-    2. Define un ESCENARIO PRINCIPAL inmutable (lugar, iluminación, atmósfera).
-    3. Genera un STORYBOARD de 6 a 8 beats (planos de 3-5 segundos). Cada 'prompt_visual' DEBE repetir exactamente la descripción del personaje y el escenario para forzar la consistencia en las IAs.
-    4. El primer beat DEBE ser un gancho visual impactante (Hook).
-    
+    REGLAS DE COHERENCIA ESTRICTA:
+    1. Define un PERSONAJE PRINCIPAL con características físicas inmutables.
+    2. Define un ESCENARIO PRINCIPAL inmutable.
+    3. Genera un STORYBOARD de 6 a 8 beats. Cada 'prompt_visual' DEBE repetir EXACTAMENTE la descripción del personaje y el escenario. Esto es obligatorio para mantener la consistencia visual.
+    4. El primer beat DEBE ser un gancho visual que detenga el scroll (Hook de 1-2 segundos).
+
     DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON CON ESTA ESTRUCTURA:
     {{
-        "titulo": "Título atractivo",
+        "titulo": "Título atractivo y único",
         "personaje": "Descripción física detallada y fija.",
         "escenario": "Descripción del lugar y la iluminación.",
         "gancho_corto": "Texto de 100-150 palabras para TikTok/Shorts. Debe ser intrigante y terminar con un CTA.",
