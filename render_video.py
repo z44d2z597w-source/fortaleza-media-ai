@@ -16,18 +16,57 @@ from pathlib import Path
 import requests
 import edge_tts
 import imageio_ffmpeg
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # ==========================================================
-# FORTALEZA MEDIA AI 22.2 — MOTOR INDESTRUCTIBLE
+# FORTALEZA MEDIA AI 24.0 — EL SISTEMA SUPREMO
+# CASCADA: AGNES -> MAGIC HOUR -> PIXABAY -> POLLINATIONS
 # ==========================================================
 
 FPS = 30
 OUTPUT = Path("output")
 RECURSOS = OUTPUT / "recursos"
+ARCHIVO_CONFIG = Path("config_edicion.json")
+REPORTE_PRODUCCION = OUTPUT / "reporte_edicion.json"
 MAX_ESCENAS = 20
-CONFIG_DEFECTO = {"corte_min": 1.5, "corte_max": 3.5}
 
+CONFIG_DEFECTO = {
+    "corte_min": 1.5,
+    "corte_max": 3.5,
+    "score_global": 0,
+    "intentos": 0
+}
+
+# --- SISTEMA DE APRENDIZAJE ---
+def cargar_configuracion():
+    if ARCHIVO_CONFIG.exists():
+        try:
+            with open(ARCHIVO_CONFIG, "r", encoding="utf-8") as f: return json.load(f)
+        except: pass
+    return CONFIG_DEFECTO.copy()
+
+def evaluar_y_guardar(config, metricas):
+    print("\n[EVOLUCIÓN] Evaluando calidad de la edición...")
+    score_pacing = 50
+    if metricas["promedio_toma"] < 2.2: score_pacing += 35
+    elif metricas["promedio_toma"] < 3.0: score_pacing += 20
+    
+    score_global = int((score_pacing + 80 + 80 + 50) / 4)
+    config["score_global"] = score_global
+    config["intentos"] = config.get("intentos", 0) + 1
+    
+    if score_pacing < 60:
+        config["corte_min"] = max(1.0, config["corte_min"] - 0.2)
+        config["corte_max"] = max(2.0, config["corte_max"] - 0.5)
+        print("[EVOLUCIÓN] Mutación: Cortes más rápidos para la próxima.")
+        
+    with open(ARCHIVO_CONFIG, "w", encoding="utf-8") as f:
+        json.dump(config, f, ensure_ascii=False, indent=4)
+    print(f"[EVOLUCIÓN] Score Final: {score_global}/100")
+
+CONFIG = cargar_configuracion()
+
+# --- UTILIDADES ---
 def preparar_carpetas():
     OUTPUT.mkdir(exist_ok=True)
     RECURSOS.mkdir(exist_ok=True)
@@ -70,85 +109,112 @@ def calcular_cortes(palabras, duracion_total):
         if c < 5.0:
             if c - cortes[-1] >= 1.2: cortes.append(c)
         else:
-            if c - cortes[-1] >= CONFIG_DEFECTO["corte_min"] and duracion_total - c >= CONFIG_DEFECTO["corte_min"]: 
+            if c - cortes[-1] >= CONFIG["corte_min"] and duracion_total - c >= CONFIG["corte_min"]: 
                 cortes.append(c)
                 
     resultado = [0.0]
     for c in cortes[1:]:
-        while c - resultado[-1] > CONFIG_DEFECTO["corte_max"]: resultado.append(resultado[-1] + CONFIG_DEFECTO["corte_max"])
+        while c - resultado[-1] > CONFIG["corte_max"]: resultado.append(resultado[-1] + CONFIG["corte_max"])
         resultado.append(c)
-    while duracion_total - resultado[-1] > CONFIG_DEFECTO["corte_max"]: resultado.append(resultado[-1] + CONFIG_DEFECTO["corte_max"])
+    while duracion_total - resultado[-1] > CONFIG["corte_max"]: resultado.append(resultado[-1] + CONFIG["corte_max"])
     if resultado[-1] < duracion_total: resultado.append(duracion_total)
     else: resultado[-1] = duracion_total
     return resultado
 
-def generar_video_agnes(prompt, duracion):
-    api_key = os.environ.get("AGNES_API_KEY")
-    if not api_key: return None
-    # (Código de Agnes se mantiene igual, resumido por espacio)
+# --- CASCADA DE MATERIAL VISUAL ---
+
+def obtener_video_ia(prompt, duracion):
+    # 1. Agnes
+    agnes_key = os.environ.get("AGNES_API_KEY")
+    if agnes_key:
+        try:
+            headers = {"Authorization": f"Bearer {agnes_key}", "Content-Type": "application/json"}
+            payload = {"model": "agnes-video-v2.0", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
+            resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=60)
+            task_id = resp.json().get("id")
+            if task_id:
+                for _ in range(30):
+                    time.sleep(10)
+                    poll = requests.get(f"https://apihub.agnes-ai.cn/v1/video/generations/{task_id}", headers=headers).json()
+                    if poll.get("status") == "succeeded":
+                        url = poll.get("output", {}).get("video_url")
+                        if url:
+                            ruta = RECURSOS / f"agnes_{task_id}.mp4"
+                            with requests.get(url, stream=True, timeout=120) as r:
+                                r.raise_for_status()
+                                with open(ruta, "wb") as f:
+                                    for chunk in r.iter_content(8192): f.write(chunk)
+                            print("[AGNES] Video IA generado.")
+                            return str(ruta)
+        except Exception: pass
+        
+    # 2. Magic Hour
+    mh_key = os.environ.get("MAGIC_HOUR_API_KEY")
+    if mh_key:
+        try:
+            headers = {"Authorization": f"Bearer {mh_key}", "Content-Type": "application/json"}
+            payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
+            resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=60)
+            resp.raise_for_status()
+            url = resp.json().get("video_url")
+            if url:
+                ruta = RECURSOS / f"mh_{int(time.time())}.mp4"
+                with requests.get(url, stream=True, timeout=120) as r:
+                    r.raise_for_status()
+                    with open(ruta, "wb") as f:
+                        for chunk in r.iter_content(8192): f.write(chunk)
+                print("[MAGIC HOUR] Video IA generado.")
+                return str(ruta)
+        except Exception: pass
+    return None
+
+def obtener_video_stock(prompt):
+    clave = os.environ.get("PIXABAY_API_KEY")
+    if not clave: return None
+    query = " ".join(re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}", prompt)[:3])
     try:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"model": "agnes-video-v2.0", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
-        resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=60)
-        task_id = resp.json().get("id") or resp.json().get("task_id")
-        if not task_id: return None
-        for _ in range(60):
-            time.sleep(10)
-            poll = requests.get(f"https://apihub.agnes-ai.cn/v1/video/generations/{task_id}", headers=headers).json()
-            if poll.get("status") == "succeeded":
-                url = poll.get("output", {}).get("video_url")
-                if url:
-                    ruta = RECURSOS / f"agnes_{task_id}.mp4"
-                    with requests.get(url, stream=True, timeout=120) as r:
-                        r.raise_for_status()
-                        with open(ruta, "wb") as f:
-                            for chunk in r.iter_content(8192): f.write(chunk)
+        resp = requests.get("https://pixabay.com/api/videos/", params={"key": clave, "q": query, "orientation": "vertical", "per_page": 3}, timeout=20).json()
+        for hit in resp.get("hits", []):
+            url = hit.get("videos", {}).get("medium", {}).get("url")
+            if url:
+                ruta = RECURSOS / f"stock_{int(time.time())}.mp4"
+                with requests.get(url, stream=True, timeout=30) as r:
+                    with open(ruta, "wb") as f:
+                        for chunk in r.iter_content(8192): f.write(chunk)
+                if os.path.getsize(ruta) > 15000:
+                    print("[STOCK] Video real de Pixabay.")
                     return str(ruta)
-            elif poll.get("status") == "failed": return None
-    except Exception: return None
+    except Exception: pass
+    return None
 
-def generar_video_magichour(prompt, duracion):
-    api_key = os.environ.get("MAGIC_HOUR_API_KEY")
-    if not api_key: return None
-    try:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
-        resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=60)
-        resp.raise_for_status()
-        video_url = resp.json().get("video_url")
-        if video_url:
-            ruta = RECURSOS / f"magichour_{int(time.time())}.mp4"
-            with requests.get(video_url, stream=True, timeout=120) as r:
-                r.raise_for_status()
-                with open(ruta, "wb") as f:
-                    for chunk in r.iter_content(8192): f.write(chunk)
-            return str(ruta)
-    except Exception: return None
-
-def generar_imagen_pollinations(prompt, num_escena, num_toma, formato):
-    """Descarga imagen y VERIFICA que no sea un archivo corrupto."""
+def obtener_imagen_ia(prompt, num_escena, num_toma, formato):
     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
     try:
         resp = requests.get(url, timeout=60)
         resp.raise_for_status()
-        
-        # VALIDACIÓN CRÍTICA: Si no es una imagen, lanzará error aquí
         img = Image.open(BytesIO(resp.content))
         img.verify()
-        
         ruta = RECURSOS / f"ia_{num_escena:02d}_{num_toma:02d}.jpg"
         with open(ruta, "wb") as f: f.write(resp.content)
-        print("[POLLINATIONS] Imagen válida generada.")
+        print("[POLLINATIONS] Imagen IA.")
         return str(ruta)
-    except Exception as e:
-        print(f"[POLLINATIONS] Falló o imagen corrupta: {e}")
-        return None
+    except Exception: return None
 
-async def generar_voz_con_respaldo(texto, ruta, voz_elegida):
-    voces_a_probar = [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]
-    for voz in voces_a_probar:
+def crear_fondo_premium(num_escena, formato):
+    ancho, alto = formato["ancho"], formato["alto"]
+    paletas = [("#071426", "#123D60"), ("#180D2C", "#43205E"), ("#111B18", "#245B43")]
+    c1, c2 = paletas[num_escena % len(paletas)]
+    gradiente = Image.linear_gradient("L").resize((ancho, alto))
+    img = ImageOps.colorize(gradiente, black=c1, white=c2).convert("RGB")
+    ruta = RECURSOS / f"grad_{num_escena:02d}.jpg"
+    img.save(ruta)
+    print("[RESPALDO] Fondo de gradiente premium.")
+    return str(ruta)
+
+# --- AUDIO Y GRÁFICOS ---
+async def generar_voz(texto, ruta, voz_elegida):
+    for voz in [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]:
         try:
-            print(f"[VOZ] Intentando: {voz}")
             tts = edge_tts.Communicate(texto, voice=voz, rate="+8%")
             audio, marcas = bytearray(), []
             async for f in tts.stream():
@@ -158,11 +224,9 @@ async def generar_voz_con_respaldo(texto, ruta, voz_elegida):
                     marcas.append({"texto": f["text"], "inicio": inicio, "fin": inicio + (f["duration"] / 10000000)})
             if len(audio) > 1000:
                 with open(ruta, "wb") as f: f.write(audio)
-                print(f"[VOZ] Éxito con {voz}")
                 return marcas
-        except Exception as e:
-            print(f"[VOZ] Error con {voz}: {e}")
-    raise RuntimeError("Ninguna voz funcionó.")
+        except Exception: pass
+    raise RuntimeError("Audio falló.")
 
 def generar_whoosh(ruta):
     frec, dur = 44100, 0.4
@@ -202,7 +266,8 @@ def crear_scroll_stopper(formato):
     img.save(ruta)
     return str(ruta)
 
-def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_video):
+# --- RENDERIZADO ---
+def crear_toma(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_video):
     ancho, alto = formato["ancho"], formato["alto"]
     if es_video:
         filtros = [f"scale={ancho}:{alto}:force_original_aspect_ratio=increase", f"crop={ancho}:{alto}", "setsar=1", "format=yuv420p"]
@@ -211,7 +276,6 @@ def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_
         movimientos = [
             ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
             ("min(zoom+0.0025,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
-            ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"),
         ]
         zoom, x, y = movimientos[idx % len(movimientos)]
         zoompan = f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}"
@@ -236,13 +300,14 @@ def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
     cmd.extend(["-filter_complex", f_vid + ";" + f_aud, "-map", "[vout]", "-map", "[audio]", "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion:.3f}", "-movflags", "+faststart", destino])
     ejecutar_ffmpeg(cmd)
 
+# --- ORQUESTADOR SUPREMO ---
 async def crear_video():
     preparar_carpetas()
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
     
     titulo = str(guion.get("titulo", "Viral"))
     voz_elegida = str(guion.get("voz", "es-MX-DaliaNeural"))
-    estilo_visual = str(guion.get("estilo_visual", "Cinematic 8k"))
+    estilo_visual = str(guion.get("estilo_visual", "Cinematic"))
     escenas = [e for e in guion.get("escenas", []) if str(e.get("narracion", "")).strip()][:MAX_ESCENAS]
     formato = {"nombre": "vertical", "ancho": 1080, "alto": 1920}
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -250,10 +315,11 @@ async def crear_video():
     escenas_finales, duraciones_finales = [], []
     whoosh = generar_whoosh(RECURSOS / "whoosh.wav")
     scroll = crear_scroll_stopper(formato)
+    metricas = {"total_tomas": 0, "duracion_total_tomas": 0}
 
     print("============================================================")
-    print(f"FORTALEZA MEDIA AI 22.2 — PRODUCIENDO: {titulo}")
-    print(f"VOZ: {voz_elegida} | ESTILO: {estilo_visual}")
+    print(f"FORTALEZA MEDIA AI 24.0 — SISTEMA SUPREMO")
+    print(f"PRODUCIENDO: {titulo} | VOZ: {voz_elegida}")
     print("============================================================")
 
     for num_escena, datos in enumerate(escenas):
@@ -261,7 +327,7 @@ async def crear_video():
         narracion = str(datos["narracion"]).strip()
         ruta_voz = RECURSOS / f"voz_{num_escena:02d}.mp3"
         
-        marcas = await generar_voz_con_respaldo(narracion, str(ruta_voz), voz_elegida)
+        marcas = await generar_voz(narracion, str(ruta_voz), voz_elegida)
         dur_voz = obtener_duracion(ffmpeg, ruta_voz)
         
         cortes = calcular_cortes(marcas, dur_voz)
@@ -273,40 +339,28 @@ async def crear_video():
             if dur <= 0.4: continue
             
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
-            prompt = f"{estilo_visual}, vertical 9:16, {narracion[:120]}"
+            prompt = f"{estilo_visual}, vertical 9:16, {narracion[:100]}"
             
-            video_ia = generar_video_agnes(prompt, dur)
+            # LA CASCADA SUPREMA
+            print(f"  -> Generando toma {i+1}...")
+            recurso = obtener_video_ia(prompt, dur)
             es_video = True
             
-            if not video_ia:
-                video_ia = generar_video_magichour(prompt, dur)
+            if not recurso:
+                recurso = obtener_video_stock(prompt)
             
-            if not video_ia:
-                video_ia = generar_imagen_pollinations(prompt, num_escena, i, formato)
+            if not recurso:
+                recurso = obtener_imagen_ia(prompt, num_escena, i, formato)
                 es_video = False
                 
-            # RESPALDO FINAL: Si Pollinations falló, creamos un fondo negro seguro
-            if not video_ia:
-                print("[RESPALDO FINAL] Creando fondo negro de emergencia...")
-                ruta_emergencia = RECURSOS / f"fondo_{num_escena:02d}_{i:02d}.jpg"
-                img = Image.new("RGB", (formato["ancho"], formato["alto"]), color=(15, 15, 15))
-                d = ImageDraw.Draw(img)
-                font = obtener_fuente_texto(60)
-                d.text((100, 960), "Generando...", font=font, fill="white")
-                img.save(ruta_emergencia)
-                video_ia = str(ruta_emergencia)
+            if not recurso:
+                recurso = crear_fondo_premium(num_escena, formato)
                 es_video = False
 
-            if video_ia:
-                crear_toma_visual(ffmpeg, video_ia, ruta_toma, dur, num_escena*10+i, formato, es_video)
-                tomas_mp4.append(str(ruta_toma))
-
-        # Verificación final de seguridad
-        if not tomas_mp4:
-            print("[AVISO CRÍTICO] No se generaron tomas. Creando video en blanco...")
-            ruta_blanco = RECURSOS / f"blanco_{num_escena:02d}.mp4"
-            ejecutar_ffmpeg([ffmpeg, "-f", "lavfi", "-i", f"color=c=black:s={formato['ancho']}x{formato['alto']}:r={FPS}:d={dur_voz}", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", str(ruta_blanco)])
-            tomas_mp4.append(str(ruta_blanco))
+            crear_toma(ffmpeg, recurso, ruta_toma, dur, num_escena*10+i, formato, es_video)
+            tomas_mp4.append(str(ruta_toma))
+            metricas["total_tomas"] += 1
+            metricas["duracion_total_tomas"] += dur
 
         ruta_visual = RECURSOS / f"vis_{num_escena:02d}.mp4"
         with open(RECURSOS / f"list_{num_escena:02d}.txt", "w") as f:
@@ -326,7 +380,7 @@ async def crear_video():
         escenas_finales.append(str(ruta_final_escena))
         duraciones_finales.append(obtener_duracion(ffmpeg, ruta_final_escena))
 
-    print("\n[RENDER] Uniendo escenas...")
+    print("\n[RENDER] Uniendo escenas con transiciones...")
     video_unido = OUTPUT / "base.mp4"
     if len(escenas_finales) > 1:
         filtros = []
@@ -351,7 +405,11 @@ async def crear_video():
     mezcla_final(ffmpeg, str(video_unido), musica, whooshes, str(destino), dur_total)
     shutil.copy2(destino, OUTPUT / "fortaleza_short.mp4")
     
-    print("\n✅ PRODUCCIÓN COMPLETADA")
+    # GUARDAR APRENDIZAJE
+    metricas["promedio_toma"] = metricas["duracion_total_tomas"] / max(1, metricas["total_tomas"])
+    evaluar_y_guardar(CONFIG, metricas)
+    
+    print("\n✅ PRODUCCIÓN SUPREMA COMPLETADA")
     return str(destino)
 
 if __name__ == "__main__":
