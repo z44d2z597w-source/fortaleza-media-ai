@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  iniciar:
+  producir:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,5 +19,12 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Iniciar FORTALEZA MEDIA AI
+      - name: Generar video
         run: python main.py
+
+      - name: Guardar video terminado
+        uses: actions/upload-artifact@v4
+        with:
+          name: FORTALEZA-MEDIA-VIDEO
+          path: output/fortaleza_short.mp4
+          retention-days: 7
