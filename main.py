@@ -16,11 +16,22 @@ ARCHIVO_PRODUCCION = CARPETA_OUTPUT / "produccion.json"
 MAX_MB = 500
 
 def validar_guion(guion):
-    if not guion or not guion.get("titulo") or not guion.get("escenas"):
-        raise ValueError("El guion está vacío o mal formado.")
-    for i, escena in enumerate(guion["escenas"]):
-        if not str(escena.get("narracion", "")).strip():
-            raise ValueError(f"La escena {i+1} no tiene narración.")
+    if not guion:
+        raise ValueError("El guion está vacío.")
+    if not guion.get("titulo"):
+        raise ValueError("El guion no tiene título.")
+    
+    # VALIDACIÓN ACTUALIZADA PARA EL STORYBOARD DEL DIRECTOR
+    notas = guion.get("director_notes", {})
+    storyboard = notas.get("storyboard", [])
+    
+    if not storyboard:
+        raise ValueError("El guion no contiene un storyboard válido en 'director_notes'.")
+        
+    for i, beat in enumerate(storyboard):
+        if not str(beat.get("narracion", "")).strip():
+            raise ValueError(f"El beat {i+1} del storyboard no tiene narración.")
+            
     return True
 
 async def main():
@@ -30,7 +41,6 @@ async def main():
 
     CARPETA_OUTPUT.mkdir(exist_ok=True)
 
-    # 1. Generar guion
     print("\n[PASO 1] Generando guion...")
     try:
         guardar_guion()
@@ -38,27 +48,25 @@ async def main():
         print(f"[ERROR FATAL] Falló la generación del guion: {e}")
         sys.exit(1)
 
-    # 2. Validar
     print("\n[PASO 2] Validando guion...")
     try:
         with open(ARCHIVO_GUION, "r", encoding="utf-8") as f:
             guion = json.load(f)
         validar_guion(guion)
+        beats = guion.get("director_notes", {}).get("storyboard", [])
         print(f"  -> Título: {guion['titulo']}")
-        print(f"  -> Escenas: {len(guion['escenas'])}")
+        print(f"  -> Beats en Storyboard: {len(beats)}")
     except Exception as e:
         print(f"[ERROR FATAL] Guion inválido: {e}")
         sys.exit(1)
 
-    # 3. Renderizar
-    print("\n[PASO 3] Renderizando video (esto tardará unos minutos)...")
+    print("\n[PASO 3] Renderizando video (esto tardará varios minutos)...")
     try:
         resultado = await crear_video()
     except Exception as e:
         print(f"[ERROR FATAL] Falló la renderización del video: {e}")
         sys.exit(1)
 
-    # 4. Verificar archivo final
     print("\n[PASO 4] Verificando archivo de salida...")
     ruta_video = None
     if isinstance(resultado, dict):
@@ -81,7 +89,7 @@ async def main():
     tamano_mb = ruta_video.stat().st_size / (1024 * 1024)
 
     if tamano_mb > MAX_MB:
-        print(f"[ERROR FATAL] El archivo pesa {tamano_mb:.2f} MB y supera el límite de {MAX_MB} MB.")
+        print(f"[ERROR FATAL] El archivo pesa {tamano_mb:.2f} MB y supera el límite.")
         sys.exit(1)
 
     print(f"  -> Archivo verificado: {ruta_video.name} ({tamano_mb:.2f} MB)")
