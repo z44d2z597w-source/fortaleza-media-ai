@@ -21,8 +21,8 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.5
-# CORRECCIÓN FINAL: FORZAR FORMATO YUV420P EN OVERLAYS
+# FORTALEZA MEDIA AI 10.6
+# OPTIMIZACIÓN DE PESO (SIN NOISE, CRF 26, MAXRATE)
 # ==========================================================
 
 FPS = 30
@@ -39,7 +39,7 @@ CORTE_MIN = 1.8
 CORTE_MAX = 4.5
 PAUSA_MIN = 0.30
 
-CRF = "22"
+CRF = "26"
 XFADE_DURACION = 0.40
 
 PALABRAS_IMPACTO = [
@@ -48,7 +48,7 @@ PALABRAS_IMPACTO = [
     "asombroso", "oculto", "verdad", "ciencia", "descubrimiento"
 ]
 
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.5"}
+CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.6"}
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -406,13 +406,15 @@ def mezclar_audio_y_barra(ffmpeg, video, musica, lista_whoosh, destino, duracion
         filtro_audio += f"[{i+2}:a]volume=0.5[w{i}];[base][w{i}]amix=inputs=2:duration=first[base];"
     filtro_audio += "[base]alimiter=limit=0.95[audio]"
 
-    filtro_video = f"[0:v]vignette=PI/5,noise=alls=5:allf=t+u,eq=contrast=1.05:saturation=1.15,drawbox=x=0:y=h-8:w='iw*t/{duracion_total}':h=8:color=white@0.6:t=fill,format=yuv420p[vout]"
+    # Se eliminó el filtro noise para bajar el peso, manteniendo vignette y eq
+    filtro_video = f"[0:v]vignette=PI/5,eq=contrast=1.05:saturation=1.15,drawbox=x=0:y=h-8:w='iw*t/{duracion_total}':h=8:color=white@0.6:t=fill,format=yuv420p[vout]"
 
     filtro_total = filtro_video + ";" + filtro_audio
 
     cmd = [ffmpeg, "-y", "-i", video, "-stream_loop", "-1", "-i", musica]
     for w in lista_whoosh: cmd.extend(["-i", w])
-    cmd.extend(["-filter_complex", filtro_total, "-map", "[vout]", "-map", "[audio]", "-c:v", "libx264", "-preset", "medium", "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion_total:.3f}", "-movflags", "+faststart", destino])
+    # Se añade maxrate y bufsize para controlar el peso final
+    cmd.extend(["-filter_complex", filtro_total, "-map", "[vout]", "-map", "[audio]", "-c:v", "libx264", "-preset", "medium", "-crf", CRF, "-maxrate", "6M", "-bufsize", "12M", "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion_total:.3f}", "-movflags", "+faststart", destino])
     ejecutar(cmd)
 
 # ==========================================================
@@ -431,7 +433,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.5\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.6\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -521,7 +523,6 @@ async def crear_video():
             filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t\\,{txt['inicio']:.3f}\\,{txt['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
-        # Forzar salida a yuv420p
         if not filtros: 
             filtros = ["[0:v]format=yuv420p[vfinal]"]
         else: 
