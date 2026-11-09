@@ -8,7 +8,7 @@ on:
         default: false
         type: boolean
   schedule:
-    # 15:00 UTC = 9:00 AM CDMX (San Luis Potosí)
+    # Se ejecuta todos los días a las 15:00 UTC (9:00 AM CDMX)
     - cron: '0 15 * * *'
 
 permissions:
@@ -17,18 +17,23 @@ permissions:
 jobs:
   producir:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 360 # 6 horas de margen por si el video largo tarda
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
-      - name: Generar Videos (Short y Largo)
+
+      - name: Generar Videos (Cerebro y Motores)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
@@ -37,48 +42,54 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
-      - name: Guardar memoria creativa
+      - name: Guardar Memoria Creativa (Anti-repetición)
         if: always()
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           [ -f historial_creativo.json ] && git add historial_creativo.json
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Auto-mejora: Historial actualizado [skip ci]"
+          git diff --cached --quiet && echo "Sin cambios en el historial." && exit 0
+          git commit -m "Auto-mejora: Historial creativo actualizado [skip ci]"
           git push
 
-      - name: Preparar metadatos
+      - name: Preparar Metadatos
         run: |
           python - <<'PY'
           import json, os
-          with open("guion.json", encoding="utf-8") as f: g = json.load(f)
+          with open("guion.json", encoding="utf-8") as f: 
+              g = json.load(f)
+              
+          titulo = " ".join(g["titulo"].split())[:100]
           
-          titulo_largo = " ".join(g["titulo"].split())[:100]
-          storyboard = g.get("director_notes", {}).get("storyboard", [])
-          texto_largo = " ".join(beat["narracion"] for beat in storyboard)
+          # Metadatos para el Video Largo
+          guion_largo = g.get("guion_largo", [])
+          texto_largo = " ".join(ep.get("narracion", "") for ep in guion_largo)
           desc_largo = texto_largo[:4000] + " #Documental #Historia #Misterio"
           
-          titulo_short = titulo_largo + " #Shorts"
-          desc_short = g["gancho_corto"] + " #Shorts #Viral #TikTok"
+          # Metadatos para el Short/Shorts
+          short_gancho = g["shorts"][0]["gancho"] if g.get("shorts") else "Historia fascinante."
+          desc_short = short_gancho[:200] + " #Shorts #Viral #TikTok"
           
           delim = "FORTALEZA_" + str(os.getpid())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"VIDEO_TITLE_LARGO<<{delim}\n{titulo_largo}\n{delim}\n")
+              f.write(f"VIDEO_TITLE_LARGO<<{delim}\n{titulo}\n{delim}\n")
               f.write(f"VIDEO_DESC_LARGO<<{delim}\n{desc_largo}\n{delim}\n")
-              f.write(f"VIDEO_TITLE_SHORT<<{delim}\n{titulo_short}\n{delim}\n")
+              f.write(f"VIDEO_TITLE_SHORT<<{delim}\n{titulo} #Shorts\n{delim}\n")
               f.write(f"VIDEO_DESC_SHORT<<{delim}\n{desc_short}\n{delim}\n")
           PY
 
-      - name: Subir artefactos (Videos para TikTok)
+      - name: Subir Artefactos (Videos para TikTok)
         uses: actions/upload-artifact@v4
         with:
           name: VIDEOS-PARA-REDES
           path: |
-            output/fortaleza_short.mp4
+            output/fortaleza_short_*.mp4
             output/fortaleza_largo.mp4
           retention-days: 7
+          if-no-files-found: warn
 
+      # --- PUBLICACIÓN EN YOUTUBE (VIDEO LARGO) ---
       - name: Publicar Video Largo en YouTube
         if: |
           github.event_name == 'schedule' || 
@@ -91,13 +102,19 @@ jobs:
         run: |
           set -e
           VIDEO="output/fortaleza_largo.mp4"
-          if [ ! -s "$VIDEO" ]; then echo "No hay video largo, saltando."; exit 0; fi
+          if [ ! -s "$VIDEO" ]; then 
+            echo "No se generó video largo, saltando este paso."; 
+            exit 0; 
+          fi
+          
+          echo "Subiendo Video Largo a YouTube..."
           curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
             -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
             -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
             --data-binary "@${VIDEO}"
 
-      - name: Publicar Short en YouTube
+      # --- PUBLICACIÓN EN YOUTUBE (SHORTS / MINI-SERIES) ---
+      - name: Publicar Shorts en YouTube
         if: |
           github.event_name == 'schedule' || 
           github.event.inputs.publicar == 'true' || 
@@ -108,9 +125,23 @@ jobs:
           VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC_SHORT }}
         run: |
           set -e
-          VIDEO="output/fortaleza_short.mp4"
-          if [ ! -s "$VIDEO" ]; then echo "No hay short, saltando."; exit 0; fi
-          curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
-            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
-            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
-            --data-binary "@${VIDEO}"
+          # El bucle intentará subir hasta 3 partes. 
+          # Si el sistema generó un Video Único, solo encontrará la parte 1 y las demás las saltará.
+          for i in 1 2 3; do
+            VIDEO="output/fortaleza_short_$i.mp4"
+            if [ -s "$VIDEO" ]; then
+              echo "Subiendo Short Parte $i a YouTube..."
+              
+              # Ajustamos el título si es una mini-serie
+              TITULO_PARTE="${VIDEO_TITLE} - Parte $i"
+              if [ "$i" -eq 1 ]; then TITULO_PARTE="${VIDEO_TITLE}"; fi
+              
+              curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
+                -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
+                -H "X-Video-Title: ${TITULO_PARTE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+                --data-binary "@${VIDEO}"
+            else
+              echo "No hay archivo para la Parte $i, saltando."
+            fi
+          done
+          echo "✅ Proceso de Shorts finalizado."
