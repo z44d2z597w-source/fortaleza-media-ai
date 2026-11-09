@@ -1,21 +1,25 @@
-import asyncio, json, sys
-from pathlib import Path
-try:
-    from video_engine import guardar_guion
-    from render_short import crear_shorts
-    from render_long import crear_long
-except ImportError as e:
-    print(f"[ERROR FATAL] {e}"); sys.exit(1)
+import asyncio
+import sys
+from video_engine import obtener_guion_hoy
+from render_short import renderizar_short
 
 async def main():
-    print("FORTALEZA MEDIA AI — MODO INFINITO Y MINI-SERIES")
+    print("=========================================")
+    print("FORTALEZA MEDIA AI — PUBLICADOR DIARIO")
+    print("=========================================")
+    
     try:
-        guardar_guion()
-        await crear_shorts()
-        # await crear_long() # (Opcional: activar cuando quieras el video largo)
+        print("[PASO 1] Obteniendo guion del día...")
+        guion = obtener_guion_hoy()
+        print(f"  -> Serie: {guion['titulo_serie']} | Parte: {guion['parte']}")
+        
+        print("[PASO 2] Renderizando el Short...")
+        await renderizar_short()
+        
         print("\n✅ PROCESO COMPLETADO")
     except Exception as e:
-        print(f"[ERROR] {e}"); sys.exit(1)
+        print(f"[ERROR] {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
