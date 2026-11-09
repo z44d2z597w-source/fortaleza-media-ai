@@ -1,4 +1,5 @@
 name: FORTALEZA MEDIA AI
+
 on:
   workflow_dispatch:
     inputs:
@@ -27,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      - name: Generar video (Ecosistema Completo)
+      - name: Generar video (Director de Escena)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
@@ -54,7 +55,12 @@ jobs:
           import json, os
           with open("guion.json", encoding="utf-8") as f: g = json.load(f)
           titulo = " ".join(g["titulo"].split())[:100]
-          desc = " ".join(e["narracion"] for e in g["escenas"])[:5000] + " #Shorts #Viral"
+          
+          # LEEMOS EL NUEVO STORYBOARD DEL DIRECTOR
+          storyboard = g.get("director_notes", {}).get("storyboard", [])
+          texto_narracion = " ".join(beat["narracion"] for beat in storyboard)
+          
+          desc = texto_narracion[:5000] + " #Shorts #Viral #Misterio"
           delim = "FORTALEZA_" + str(os.getpid())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
               f.write(f"VIDEO_TITLE<<{delim}\n{titulo}\n{delim}\n")
