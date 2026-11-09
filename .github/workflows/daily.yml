@@ -3,6 +3,13 @@ name: FORTALEZA MEDIA AI
 
 on:
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar el video en YouTube"
+        required: true
+        type: boolean
+        default: false
+
   schedule:
     - cron: '0 15 * * *'
 
@@ -61,6 +68,7 @@ jobs:
           retention-days: 7
 
       - name: Publicar automáticamente en YouTube
+        if: github.event_name == 'schedule' || inputs.publicar == true
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
