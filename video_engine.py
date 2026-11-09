@@ -1,114 +1,104 @@
 
 import json
-import re
 import random
-import time
-import urllib.parse
-import urllib.request
+import re
+import requests
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
 # ==========================================================
-# FORTALEZA MEDIA AI — VIDEO ENGINE 4.0
-# DESCUBRIMIENTO Y CREACIÓN AUTOMÁTICA DE GUIONES
+# FORTALEZA MEDIA AI 5.0
+# MOTOR EDITORIAL INTELIGENTE
 # ==========================================================
 
-VERSION = "4.0"
+VERSION = "5.0"
+
+IDIOMA = "es-MX"
 
 ARCHIVO_GUION = Path("guion.json")
 ARCHIVO_HISTORIAL = Path("historial_temas.json")
 
-IDIOMA = "es-MX"
-DURACION = 60
-
-USER_AGENT = (
-    "FORTALEZA-MEDIA-AI/4.0 "
-    "(educational video production)"
-)
-
 URL_PAGEVIEWS = (
-    "https://wikimedia.org/api/rest_v1/metrics/pageviews/"
-    "top/es.wikipedia/all-access/user/{fecha}"
+    "https://wikimedia.org/api/rest_v1/"
+    "metrics/pageviews/top/es.wikipedia/all-access/user"
 )
 
-URL_WIKIPEDIA_API = (
+URL_WIKIPEDIA = (
     "https://es.wikipedia.org/w/api.php"
 )
 
-# Evita artículos que no sirven como tema principal.
-PALABRAS_EXCLUIDAS = [
-    "desambiguación",
-    "anexo:",
-    "categoría:",
-    "especial:",
-    "wikipedia:",
-    "portal:",
-    "discusión:",
-    "usuario:",
-    "plantilla:",
-    "archivo:",
-    "lista de",
-    "elecciones",
-    "resultados electorales",
-]
+CABECERAS = {
+    "User-Agent": "FORTALEZA-MEDIA-AI/5.0"
+}
 
-# Fuentes de respaldo si Wikipedia no responde.
+MAX_HISTORIAL = 300
+
+MAX_CARACTERES_INVESTIGACION = 10000
+
 TEMAS_RESPALDO = [
     "Fosa de las Marianas",
-    "Pulpo",
     "Bioluminiscencia",
     "Tiburón de Groenlandia",
+    "Pulpo",
     "Aurora polar",
-    "Volcanes submarinos",
-    "Estrellas de mar",
     "Agujeros negros",
+    "Volcanes submarinos",
     "Antártida",
-    "La Gran Barrera de Coral",
-    "Marte",
-    "Tardígrados",
-    "La selva amazónica",
-    "La Luna",
-    "El sistema solar",
+    "Planeta Marte",
+    "Cerebro humano",
+    "Bosques tropicales",
+    "Extinción de especies",
+    "Océanos",
+    "Evolución humana",
+    "Vida en condiciones extremas",
+]
+
+FRASES_GANCHO = [
+    "Lo que estás a punto de descubrir parece imposible, pero tiene una explicación.",
+    "Existe algo relacionado con este tema que muy pocas personas conocen.",
+    "Hay un detalle de esta historia que cambia por completo la manera de entenderla.",
+    "Prepárate, porque este descubrimiento tiene mucho más detrás de lo que parece.",
+    "A primera vista parece algo normal, pero la realidad es mucho más sorprendente.",
+]
+
+FRASES_TRANSICION = [
+    "Pero aquí es donde la historia se vuelve todavía más interesante.",
+    "Y eso nos lleva a una pregunta importante.",
+    "Sin embargo, existe otro detalle que merece atención.",
+    "Lo interesante es que este fenómeno tiene más de una explicación.",
+    "Para comprenderlo, hay que observar lo que ocurre detrás.",
+    "Y precisamente ahí aparece uno de los datos más importantes.",
+]
+
+FRASES_CIERRE = [
+    "Y aunque conocemos mucho más sobre este tema, todavía quedan preguntas por responder.",
+    "Este es un recordatorio de cuánto nos falta por descubrir.",
+    "La realidad demuestra que el mundo todavía guarda historias extraordinarias.",
 ]
 
 
 # ==========================================================
-# CONEXIÓN A FUENTES PÚBLICAS
+# CONEXIÓN HTTP
 # ==========================================================
 
-def obtener_json(url, timeout=15):
+def obtener_json(url, parametros=None, timeout=25):
 
-    solicitud = urllib.request.Request(
+    respuesta = requests.get(
         url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/json"
-        }
+        params=parametros,
+        headers=CABECERAS,
+        timeout=timeout
     )
 
-    with urllib.request.urlopen(
-        solicitud,
-        timeout=timeout
-    ) as respuesta:
+    respuesta.raise_for_status()
 
-        contenido = respuesta.read().decode("utf-8")
-
-        return json.loads(contenido)
-
-
-def fecha_pageviews():
-
-    # Los datos del día anterior suelen estar disponibles
-    # con mayor fiabilidad que los del día en curso.
-    fecha = datetime.now(timezone.utc).date() - timedelta(days=1)
-
-    return fecha.strftime("%Y/%m/%d")
+    return respuesta.json()
 
 
 # ==========================================================
-# HISTORIAL PARA EVITAR REPETICIONES
+# HISTORIAL DE TEMAS
 # ==========================================================
 
 def cargar_historial():
@@ -117,7 +107,8 @@ def cargar_historial():
         return []
 
     try:
-        with ARCHIVO_HISTORIAL.open(
+        with open(
+            ARCHIVO_HISTORIAL,
             "r",
             encoding="utf-8"
         ) as archivo:
@@ -127,311 +118,262 @@ def cargar_historial():
         if isinstance(datos, list):
             return datos
 
-        if isinstance(datos, dict):
-            return datos.get("temas", [])
+        return []
 
     except Exception as error:
-        print(f"[HISTORIAL] No se pudo leer: {error}")
 
-    return []
+        print("[HISTORIAL] No se pudo leer:", error)
+
+        return []
 
 
 def guardar_historial(historial):
 
-    datos = {
-        "version": VERSION,
-        "actualizado": datetime.now(
-            timezone.utc
-        ).isoformat(),
-        "temas": historial[-300:]
-    }
+    historial = historial[-MAX_HISTORIAL:]
 
-    ARCHIVO_HISTORIAL.write_text(
-        json.dumps(
-            datos,
+    temporal = ARCHIVO_HISTORIAL.with_suffix(".tmp")
+
+    with open(
+        temporal,
+        "w",
+        encoding="utf-8"
+    ) as archivo:
+
+        json.dump(
+            historial,
+            archivo,
             ensure_ascii=False,
             indent=4
-        ),
-        encoding="utf-8"
-    )
+        )
+
+    temporal.replace(ARCHIVO_HISTORIAL)
 
 
-def normalizar(texto):
+def tema_ya_utilizado(titulo, historial):
 
-    texto = str(texto).lower().strip()
-
-    texto = re.sub(
-        r"[^a-záéíóúüñ0-9 ]",
-        "",
-        texto
-    )
-
-    return re.sub(r"\s+", " ", texto)
-
-
-def tema_ya_usado(titulo, historial):
-
-    titulo_normalizado = normalizar(titulo)
+    normalizado = titulo.strip().lower()
 
     for elemento in historial:
 
-        if isinstance(elemento, str):
-            anterior = elemento
+        if isinstance(elemento, dict):
 
-        elif isinstance(elemento, dict):
-            anterior = elemento.get("titulo", "")
+            anterior = str(
+                elemento.get("titulo", "")
+            ).strip().lower()
 
         else:
-            continue
 
-        if normalizar(anterior) == titulo_normalizado:
+            anterior = str(elemento).strip().lower()
+
+        if anterior == normalizado:
             return True
 
     return False
 
 
 # ==========================================================
-# DESCUBRIMIENTO DE TEMAS
+# DETECCIÓN DE TEMAS POPULARES
 # ==========================================================
 
-def obtener_temas_populares():
+def obtener_fecha_pageviews():
 
-    fecha = fecha_pageviews()
+    ayer = datetime.now(
+        timezone.utc
+    ).date() - timedelta(days=1)
 
-    url = URL_PAGEVIEWS.format(fecha=fecha)
+    return ayer.strftime("%Y/%m/%d")
 
-    datos = obtener_json(url)
 
-    articulos = datos.get("items", [])
+def limpiar_titulo(titulo):
 
-    if not articulos:
-        return []
+    titulo = str(titulo).replace("_", " ")
 
-    paginas = articulos[0].get("articles", [])
-
-    candidatos = []
-
-    for pagina in paginas:
-
-        titulo = pagina.get("article", "").replace("_", " ").strip()
-
-        if not titulo:
-            continue
-
-        titulo_lower = titulo.lower()
-
-        if any(
-            palabra in titulo_lower
-            for palabra in PALABRAS_EXCLUIDAS
-        ):
-            continue
-
-        # Evitar páginas que sean fechas o números.
-        if re.fullmatch(r"[\d\s./-]+", titulo):
-            continue
-
-        # Evitar títulos demasiado largos.
-        if len(titulo) > 90:
-            continue
-
-        candidatos.append({
-            "titulo": titulo,
-            "visitas": pagina.get("views", 0)
-        })
-
-    # Priorizar páginas populares sin elegir siempre
-    # necesariamente la primera posición.
-    candidatos.sort(
-        key=lambda x: x["visitas"],
-        reverse=True
+    titulo = re.sub(
+        r"\s*\([^)]*desambiguación[^)]*\)",
+        "",
+        titulo,
+        flags=re.IGNORECASE
     )
 
-    return candidatos[:60]
+    return titulo.strip()
+
+
+def titulo_valido(titulo):
+
+    titulo = limpiar_titulo(titulo)
+
+    if len(titulo) < 5:
+        return False
+
+    prohibidas = [
+        "portada",
+        "wikipedia:",
+        "especial:",
+        "archivo:",
+        "categoría:",
+        "discusión:",
+        "anexo:",
+        "plantilla:",
+        "usuario:",
+        "ayuda:",
+        "fecha",
+    ]
+
+    bajo = titulo.lower()
+
+    if any(
+        palabra in bajo
+        for palabra in prohibidas
+    ):
+        return False
+
+    if re.fullmatch(
+        r"\d{1,4}",
+        titulo
+    ):
+        return False
+
+    if re.fullmatch(
+        r"\d{1,2}\s+de\s+\w+",
+        bajo
+    ):
+        return False
+
+    return True
+
+
+def descubrir_temas():
+
+    fecha = obtener_fecha_pageviews()
+
+    url = f"{URL_PAGEVIEWS}/{fecha}"
+
+    print("[TENDENCIAS] Consultando temas populares...")
+
+    try:
+
+        datos = obtener_json(url)
+
+        articulos = datos.get(
+            "items", [{}]
+        )[0].get("articles", [])
+
+        articulos = sorted(
+            articulos,
+            key=lambda x: x.get("views", 0),
+            reverse=True
+        )
+
+        resultado = []
+
+        for articulo in articulos:
+
+            titulo = limpiar_titulo(
+                articulo.get("article", "")
+            )
+
+            if not titulo_valido(titulo):
+                continue
+
+            resultado.append({
+                "titulo": titulo,
+                "visitas": articulo.get("views", 0),
+            })
+
+            if len(resultado) >= 35:
+                break
+
+        print(
+            "[TENDENCIAS] Temas encontrados:",
+            len(resultado)
+        )
+
+        return resultado
+
+    except Exception as error:
+
+        print(
+            "[TENDENCIAS] No se pudo consultar:",
+            error
+        )
+
+        return []
 
 
 # ==========================================================
-# INVESTIGACIÓN DEL ARTÍCULO
+# INVESTIGACIÓN DEL TEMA
 # ==========================================================
 
-def investigar_articulo(titulo):
+def investigar_tema(titulo):
+
+    print("[INVESTIGACIÓN]", titulo)
 
     parametros = {
         "action": "query",
         "format": "json",
         "prop": "extracts",
-        "exintro": "1",
-        "explaintext": "1",
-        "redirects": "1",
-        "titles": titulo
+        "titles": titulo,
+        "explaintext": 1,
+        "exsectionformat": "plain",
+        "redirects": 1,
     }
-
-    url = (
-        URL_WIKIPEDIA_API
-        + "?"
-        + urllib.parse.urlencode(parametros)
-    )
-
-    datos = obtener_json(url)
-
-    paginas = datos.get(
-        "query",
-        {}
-    ).get(
-        "pages",
-        {}
-    )
-
-    for pagina in paginas.values():
-
-        extracto = pagina.get(
-            "extract",
-            ""
-        ).strip()
-
-        titulo_real = pagina.get(
-            "title",
-            titulo
-        )
-
-        if len(extracto) >= 300:
-
-            return {
-                "titulo": titulo_real,
-                "extracto": extracto,
-                "url": (
-                    "https://es.wikipedia.org/wiki/"
-                    + urllib.parse.quote(
-                        titulo_real.replace(" ", "_")
-                    )
-                )
-            }
-
-    return None
-
-
-# ==========================================================
-# SELECCIÓN INTELIGENTE DEL TEMA
-# ==========================================================
-
-def seleccionar_tema():
-
-    historial = cargar_historial()
-
-    candidatos = []
 
     try:
 
-        print("[TEMAS] Consultando temas populares...")
-
-        candidatos = obtener_temas_populares()
-
-        print(
-            f"[TEMAS] Candidatos encontrados: "
-            f"{len(candidatos)}"
+        datos = obtener_json(
+            URL_WIKIPEDIA,
+            parametros
         )
+
+        paginas = datos.get(
+            "query", {}
+        ).get("pages", {})
+
+        for pagina in paginas.values():
+
+            extracto = pagina.get(
+                "extract",
+                ""
+            )
+
+            extracto = limpiar_texto(extracto)
+
+            if len(extracto) < 350:
+                return None
+
+            return {
+                "titulo": pagina.get(
+                    "title",
+                    titulo
+                ),
+                "texto": extracto[
+                    :MAX_CARACTERES_INVESTIGACION
+                ],
+                "url": (
+                    "https://es.wikipedia.org/wiki/"
+                    + pagina.get(
+                        "title",
+                        titulo
+                    ).replace(" ", "_")
+                )
+            }
 
     except Exception as error:
 
         print(
-            f"[TEMAS] Consulta no disponible: {error}"
+            "[INVESTIGACIÓN] Error:",
+            error
         )
 
-    # Primero se intenta utilizar contenido popular nuevo.
-    for candidato in candidatos:
+    return None
 
-        titulo = candidato["titulo"]
-
-        if tema_ya_usado(titulo, historial):
-            continue
-
-        try:
-
-            articulo = investigar_articulo(titulo)
-
-            if articulo:
-
-                articulo["visitas"] = candidato["visitas"]
-
-                print(
-                    f"[TEMAS] Tema seleccionado: "
-                    f"{articulo['titulo']}"
-                )
-
-                return articulo
-
-        except Exception as error:
-
-            print(
-                f"[TEMAS] No se pudo investigar "
-                f"{titulo}: {error}"
-            )
-
-        time.sleep(0.15)
-
-    # Si no hay temas populares disponibles,
-    # utilizar el banco de respaldo.
-    disponibles = [
-        tema for tema in TEMAS_RESPALDO
-        if not tema_ya_usado(tema, historial)
-    ]
-
-    if disponibles:
-
-        random.shuffle(disponibles)
-
-        for titulo in disponibles:
-
-            try:
-
-                articulo = investigar_articulo(titulo)
-
-                if articulo:
-                    print(
-                        f"[TEMAS] Tema de respaldo: "
-                        f"{articulo['titulo']}"
-                    )
-                    return articulo
-
-            except Exception:
-                continue
-
-    # Si todos los temas están usados, reiniciar
-    # únicamente el historial de selección.
-    print(
-        "[TEMAS] Se agotaron los temas disponibles. "
-        "Reiniciando historial."
-    )
-
-    guardar_historial([])
-
-    for titulo in TEMAS_RESPALDO:
-
-        try:
-
-            articulo = investigar_articulo(titulo)
-
-            if articulo:
-                return articulo
-
-        except Exception:
-            continue
-
-    raise RuntimeError(
-        "No fue posible encontrar un tema ni consultar "
-        "una fuente de información."
-    )
-
-
-# ==========================================================
-# CONSTRUCCIÓN DEL GUION
-# ==========================================================
 
 def limpiar_texto(texto):
 
     texto = re.sub(
         r"\[\d+\]",
         "",
-        texto
+        str(texto)
     )
 
     texto = re.sub(
@@ -443,7 +385,84 @@ def limpiar_texto(texto):
     return texto.strip()
 
 
-def separar_oraciones(texto):
+# ==========================================================
+# SELECCIÓN AUTOMÁTICA DEL TEMA
+# ==========================================================
+
+def seleccionar_tema():
+
+    historial = cargar_historial()
+
+    tendencias = descubrir_temas()
+
+    candidatos = [
+        elemento["titulo"]
+        for elemento in tendencias
+        if not tema_ya_utilizado(
+            elemento["titulo"],
+            historial
+        )
+    ]
+
+    random.shuffle(candidatos)
+
+    for titulo in candidatos[:15]:
+
+        investigacion = investigar_tema(titulo)
+
+        if investigacion:
+
+            print(
+                "[TEMA SELECCIONADO]",
+                investigacion["titulo"]
+            )
+
+            return investigacion
+
+    # Respaldo automático.
+    respaldo = [
+        tema
+        for tema in TEMAS_RESPALDO
+        if not tema_ya_utilizado(
+            tema,
+            historial
+        )
+    ]
+
+    random.shuffle(respaldo)
+
+    for titulo in respaldo:
+
+        investigacion = investigar_tema(titulo)
+
+        if investigacion:
+            return investigacion
+
+    # Si todos los temas se han utilizado,
+    # reinicia el ciclo de selección.
+    print(
+        "[HISTORIAL] Reiniciando ciclo de temas."
+    )
+
+    guardar_historial([])
+
+    for titulo in TEMAS_RESPALDO:
+
+        investigacion = investigar_tema(titulo)
+
+        if investigacion:
+            return investigacion
+
+    raise RuntimeError(
+        "No se pudo encontrar un tema investigable."
+    )
+
+
+# ==========================================================
+# ANÁLISIS DEL CONTENIDO
+# ==========================================================
+
+def dividir_oraciones(texto):
 
     texto = limpiar_texto(texto)
 
@@ -453,49 +472,85 @@ def separar_oraciones(texto):
     )
 
     return [
-        o.strip()
-        for o in oraciones
-        if len(o.strip()) > 35
+        oracion.strip()
+        for oracion in oraciones
+        if len(oracion.strip()) > 35
     ]
 
 
-def construir_guion(articulo):
+def dividir_en_bloques(oraciones, cantidad):
 
-    titulo = articulo["titulo"]
+    bloques = [
+        []
+        for _ in range(cantidad)
+    ]
 
-    extracto = articulo["extracto"]
+    for indice, oracion in enumerate(oraciones):
 
-    fuente = articulo["url"]
-
-    oraciones = separar_oraciones(extracto)
-
-    if len(oraciones) < 3:
-        raise ValueError(
-            "El artículo no contiene suficiente información."
+        posicion = min(
+            cantidad - 1,
+            int(
+                indice * cantidad /
+                max(1, len(oraciones))
+            )
         )
 
-    # Se utilizan oraciones del artículo como base
-    # para reducir la invención de datos.
-    seleccionadas = oraciones[:8]
+        bloques[posicion].append(oracion)
 
-    desarrollo = " ".join(seleccionadas[:6])
+    return [
+        " ".join(bloque)
+        for bloque in bloques
+        if bloque
+    ]
 
-    revelacion = (
-        "Y esto es solamente una parte de lo que "
-        "se conoce sobre este tema. "
-        "La información sigue siendo objeto de estudio."
+
+def contar_palabras(texto):
+
+    return len(
+        re.findall(
+            r"\b[\wáéíóúñÁÉÍÓÚÑ]+\b",
+            texto
+        )
     )
 
+
+# ==========================================================
+# CONSTRUCCIÓN DE SHORTS
+# ==========================================================
+
+def crear_guion_short(investigacion):
+
+    titulo = investigacion["titulo"]
+
+    oraciones = dividir_oraciones(
+        investigacion["texto"]
+    )
+
+    if not oraciones:
+        raise RuntimeError(
+            "No hay información suficiente para el guion."
+        )
+
     gancho = (
-        f"¿Sabías que existe algo llamado {titulo}? "
-        "Lo que hay detrás de este tema es mucho "
-        "más interesante de lo que parece."
+        random.choice(FRASES_GANCHO)
+        + " "
+        + titulo
+        + " es un tema que merece atención."
+    )
+
+    desarrollo = " ".join(
+        oraciones[:5]
+    )
+
+    revelacion = (
+        random.choice(FRASES_TRANSICION)
+        + " "
+        + " ".join(oraciones[5:8])
     )
 
     cierre = (
-        "¿Ya conocías este tema? "
-        "Cuéntame qué fue lo que más te sorprendió "
-        "y comparte este video."
+        random.choice(FRASES_CIERRE)
+        + " ¿Qué parte de esta historia te sorprendió más?"
     )
 
     escenas = [
@@ -503,139 +558,307 @@ def construir_guion(articulo):
             "numero": 1,
             "duracion": 7,
             "tipo": "gancho",
-            "narracion": gancho
+            "titulo": titulo,
+            "narracion": gancho,
         },
         {
             "numero": 2,
-            "duracion": 43,
-            "tipo": "investigacion",
-            "narracion": desarrollo
+            "duracion": 38,
+            "tipo": "desarrollo",
+            "titulo": "Lo que necesitas saber",
+            "narracion": desarrollo,
         },
         {
             "numero": 3,
-            "duracion": 10,
+            "duracion": 15,
             "tipo": "revelacion_y_cierre",
+            "titulo": "El detalle sorprendente",
             "narracion": (
                 revelacion + " " + cierre
-            )
-        }
+            ),
+        },
     ]
 
-    descripcion = (
-        f"{titulo}\n\n"
-        "Descubre este tema con FORTALEZA MEDIA AI.\n\n"
-        f"Fuente informativa: {fuente}\n\n"
-        "Contenido elaborado a partir de información "
-        "documental. Consulta la fuente para conocer "
-        "el contexto completo."
-    )
-
     return {
-        "titulo": titulo,
-        "formato": "YouTube Shorts",
-        "duracion": DURACION,
-        "idioma": IDIOMA,
-        "estilo": (
-            "documental, misterio, divulgación, "
-            "suspenso y curiosidades"
-        ),
-        "fuente": fuente,
+        "formato": "YouTube Shorts 9:16",
+        "duracion": 60,
         "escenas": escenas,
-        "descripcion": descripcion,
-        "hashtags": [
-            "#Shorts",
-            "#Curiosidades",
-            "#AprendeEnTikTok",
-            "#Ciencia",
-            "#Documental",
-            "#FORTALEZAMEDIA"
-        ],
-        "creado": datetime.now(
-            timezone.utc
-        ).isoformat()
     }
 
 
 # ==========================================================
-# GUARDAR GUION E HISTORIAL
+# CONSTRUCCIÓN DE VIDEO HORIZONTAL
 # ==========================================================
 
-def guardar_guion(tema=None):
+def crear_guion_largo(investigacion):
 
-    # Permite conservar la compatibilidad con main.py.
-    # Si se indica un tema manual, se investiga ese tema.
-    if tema and normalizar(tema) not in (
+    titulo = investigacion["titulo"]
+
+    oraciones = dividir_oraciones(
+        investigacion["texto"]
+    )
+
+    if len(oraciones) < 12:
+        return None
+
+    bloques = dividir_en_bloques(
+        oraciones,
+        8
+    )
+
+    if len(bloques) < 6:
+        return None
+
+    escenas = []
+
+    titulos = [
+        "Una historia que merece conocerse",
+        "El contexto",
+        "Los primeros detalles",
+        "Cómo funciona",
+        "Lo que sabemos",
+        "Un descubrimiento importante",
+        "Lo que todavía falta entender",
+        "La conclusión",
+    ]
+
+    gancho = (
+        random.choice(FRASES_GANCHO)
+        + " Hoy vamos a conocer la historia de "
+        + titulo
+        + "."
+    )
+
+    escenas.append({
+        "numero": 1,
+        "duracion": 20,
+        "tipo": "gancho",
+        "titulo": titulo,
+        "narracion": gancho,
+    })
+
+    for indice, bloque in enumerate(bloques[:7]):
+
+        narracion = bloque
+
+        if indice > 0:
+            narracion = (
+                random.choice(FRASES_TRANSICION)
+                + " "
+                + narracion
+            )
+
+        escenas.append({
+            "numero": indice + 2,
+            "duracion": 30,
+            "tipo": "desarrollo",
+            "titulo": titulos[
+                min(indice + 1, len(titulos) - 1)
+            ],
+            "narracion": narracion,
+        })
+
+    escenas.append({
+        "numero": len(escenas) + 1,
+        "duracion": 20,
+        "tipo": "cierre",
+        "titulo": "Lo que nos deja esta historia",
+        "narracion": (
+            random.choice(FRASES_CIERRE)
+            + " ¿Qué fue lo que más te llamó la atención? "
+            "Comparte tu opinión."
+        ),
+    })
+
+    palabras = sum(
+        contar_palabras(escena["narracion"])
+        for escena in escenas
+    )
+
+    # Un video largo requiere suficiente narración.
+    if palabras < 260:
+        return None
+
+    return {
+        "formato": "YouTube horizontal 16:9",
+        "duracion": 240,
+        "escenas": escenas,
+    }
+
+
+# ==========================================================
+# DECISIÓN EDITORIAL
+# ==========================================================
+
+def decidir_formato(investigacion):
+
+    historial = cargar_historial()
+
+    oraciones = dividir_oraciones(
+        investigacion["texto"]
+    )
+
+    palabras = contar_palabras(
+        investigacion["texto"]
+    )
+
+    # Se favorecen Shorts, pero se reserva espacio
+    # para contenido horizontal cuando hay suficiente material.
+    turno_largo = (
+        (len(historial) + 1) % 4 == 0
+    )
+
+    if turno_largo and palabras >= 500 and len(oraciones) >= 12:
+
+        guion = crear_guion_largo(
+            investigacion
+        )
+
+        if guion:
+            print(
+                "[EDITORIAL] Formato horizontal seleccionado."
+            )
+            return guion
+
+    print(
+        "[EDITORIAL] Formato Shorts seleccionado."
+    )
+
+    return crear_guion_short(
+        investigacion
+    )
+
+
+# ==========================================================
+# CREACIÓN DEL GUION FINAL
+# ==========================================================
+
+def crear_guion(tema=None):
+
+    if tema and tema.strip().lower() not in (
         "aleatorio",
+        "automático",
         "automatico",
-        "misterios del oceano"
+        "tendencias"
     ):
 
-        articulo = investigar_articulo(tema)
+        investigacion = investigar_tema(
+            tema.strip()
+        )
 
-        if not articulo:
+        if not investigacion:
             raise RuntimeError(
-                f"No se pudo investigar el tema: {tema}"
+                "No se pudo investigar el tema solicitado."
             )
 
     else:
 
-        articulo = seleccionar_tema()
+        investigacion = seleccionar_tema()
 
-    guion = construir_guion(articulo)
+    contenido = decidir_formato(
+        investigacion
+    )
 
-    ARCHIVO_GUION.write_text(
-        json.dumps(
+    titulo = investigacion["titulo"]
+
+    escenas = contenido["escenas"]
+
+    palabras = sum(
+        contar_palabras(
+            escena["narracion"]
+        )
+        for escena in escenas
+    )
+
+    formato = contenido["formato"]
+
+    hashtags = [
+        "#FORTALEZAMEDIA",
+        "#Curiosidades",
+        "#Ciencia",
+        "#Conocimiento",
+        "#Historias",
+    ]
+
+    if "Shorts" in formato:
+        hashtags.insert(0, "#Shorts")
+    else:
+        hashtags.insert(0, "#Documental")
+
+    descripcion = (
+        f"{titulo}\n\n"
+        "Contenido narrado en español mexicano. "
+        "Investigación y contexto basados en la fuente indicada.\n\n"
+        f"Fuente de consulta: {investigacion['url']}\n\n"
+        + " ".join(hashtags)
+    )
+
+    return {
+        "version_motor": VERSION,
+        "titulo": titulo,
+        "formato": formato,
+        "duracion": contenido["duracion"],
+        "idioma": IDIOMA,
+        "estilo": (
+            "documental cinematográfico, "
+            "divulgación, suspenso y narrativa dinámica"
+        ),
+        "palabras": palabras,
+        "escenas": escenas,
+        "descripcion": descripcion,
+        "hashtags": hashtags,
+        "fuente": investigacion["url"],
+        "creado": datetime.now().astimezone().isoformat(),
+    }
+
+
+# ==========================================================
+# GUARDAR Y REGISTRAR PRODUCCIÓN
+# ==========================================================
+
+def guardar_guion(tema=None):
+
+    guion = crear_guion(tema)
+
+    temporal = ARCHIVO_GUION.with_suffix(".tmp")
+
+    with open(
+        temporal,
+        "w",
+        encoding="utf-8"
+    ) as archivo:
+
+        json.dump(
             guion,
+            archivo,
             ensure_ascii=False,
             indent=4
-        ),
-        encoding="utf-8"
-    )
+        )
+
+    temporal.replace(ARCHIVO_GUION)
 
     historial = cargar_historial()
 
     historial.append({
-        "titulo": articulo["titulo"],
-        "fecha": datetime.now(
-            timezone.utc
-        ).isoformat(),
-        "fuente": articulo["url"]
+        "titulo": guion["titulo"],
+        "formato": guion["formato"],
+        "creado": guion["creado"],
     })
 
     guardar_historial(historial)
 
-    print(
-        "[GUION] Guion generado correctamente: "
-        + guion["titulo"]
-    )
+    print("=" * 55)
+    print("FORTALEZA MEDIA AI 5.0")
+    print("GUION GENERADO")
+    print("Título:", guion["titulo"])
+    print("Formato:", guion["formato"])
+    print("Escenas:", len(guion["escenas"]))
+    print("Palabras:", guion["palabras"])
+    print("=" * 55)
 
     return guion
 
 
-# ==========================================================
-# PRUEBA DIRECTA
-# ==========================================================
-
 if __name__ == "__main__":
 
-    print("=" * 55)
-    print("FORTALEZA MEDIA AI — VIDEO ENGINE 4.0")
-    print("=" * 55)
-
-    resultado = guardar_guion()
-
-    print("\nTÍTULO:")
-    print(resultado["titulo"])
-
-    print("\nESCENAS:")
-
-    for escena in resultado["escenas"]:
-
-        print(
-            f"\n{escena['numero']}. "
-            f"{escena['tipo'].upper()}"
-        )
-
-        print(escena["narracion"])
-
-    print("\nGUION GUARDADO EN guion.json")
+    guardar_guion()
