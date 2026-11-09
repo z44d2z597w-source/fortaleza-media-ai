@@ -1,0 +1,39 @@
+{
+    "titulo_serie": "La Casa de los Susurros",
+    "episodios": [
+        {
+            "parte": 1,
+            "titulo_episodio": "El Legado Olvidado",
+            "narracion": "En una lluviosa tarde de otoño, Clara hereda la antigua mansión de su tía abuela, una mujer de la que apenas se hablaba. Al cruzar el umbral, el aire se vuelve denso y un leve susurro parece emanar de las paredes. Encuentra un viejo diario cubierto de polvo, cuyas páginas describen rituales para contactar a los que ya no están. Mientras lee la última entrada, una sombra se desliza detrás de la puerta principal y una mano helada roza su hombro. Clara se gira, pero el pasillo está vacío. El susurro se vuelve una voz clara que le dice: \"No deberías haber venido\". Con el corazón latiendo, ve una luz tenue bajo la escalera que nunca había visto antes. Justo cuando decide investigar, la luz se apaga repentinamente, dejando solo el sonido de pasos que se acercan...",
+            "prompt_visual": "A dimly lit Victorian mansion interior, rain streaking the windows, dust motes in the air, an old leather-bound diary on a wooden table, shadows lurking in the hallway, cinematic atmosphere"
+        },
+        "",
+        {
+            "parte": 2,
+            "titulo_episodio": "El Cuadro que Observa",
+            "narracion": "Clara baja al sótano, guiada por la luz temblorosa que había visto. Allí, entre cajas viejas, descubre un gran cuadro de una mujer de mirada penetrante, colgado directamente frente a ella. Al acercarse, la mirada del retrato parece seguir cada movimiento. De repente, la pintura emite un suave crujido, y la figura del cuadro abre la boca, susurrando una frase incomprensible. Clara, paralizada, siente una corriente fría recorrer su espalda. En la esquina del sótano, una puerta metálica que antes estaba oculta se abre lentamente, revelando una escalera descendente que desciende a la oscuridad. El cuadro se vuelve negro por completo y una mano pálida emerge del marco, agarrando el hombro de Clara. Ella grita, pero el sonido se ahoga cuando...",
+            "prompt_visual": "A dark basement with a large antique portrait, the painted woman's eyes glowing, a hidden metal door ajar, a spiral staircase leading down, eerie lighting, high contrast shadows"
+        },
+        "",
+        {
+            "parte": 3,
+            "titulo_episodio": "El Laberinto Subterráneo",
+            "narracion": "Sin aliento, Clara sigue la mano fantasmagórica mientras la escalera la lleva a un laberinto subterráneo de túneles de piedra. Las paredes están cubiertas de símbolos arcanos que brillan tenuemente al contacto. Cada paso resuena con un eco que parece repetir sus propios latidos. En la encrucijada principal, descubre una puerta de madera tallada con un sello de cera roto, como si alguien la hubiera forzado. Al empujarla, una corriente de aire helado la envuelve y una melodía distante, casi infantil, comienza a sonar. De la oscuridad surge una figura encapuchada que sostiene una muñeca de porcelana rota. La figura levanta la cabeza, revelando ojos sin pupilas que la miran fijamente. \"Te he estado esperando\", susurra, mientras la luz de una antorcha se apaga, dejando a Clara en total oscuridad...",
+            "prompt_visual": "Underground stone labyrinth with glowing runes, a broken wax seal on a wooden door, a hooded figure holding a cracked porcelain doll, dim torchlight flickering, ominous atmosphere"
+        },
+        "",
+        {
+            "parte": 4,
+            "titulo_episodio": "El Eco del Pasado",
+            "narracion": "En la penumbra, Clara siente una vibración que hace temblar el suelo. De repente, el sonido de una vieja canción de cuna llena el aire, aunque no hay ninguna fuente visible. La figura encapuchada desaparece, dejando atrás una pequeña caja de música abierta sobre una losa de mármol. Al acercarse, la caja reproduce la melodía mientras una proyección de luz revela la silueta de una mujer joven, vestida con ropa de principios del siglo XX, que parece estar atrapada dentro del objeto. La mujer levanta la mano y señala un punto en la pared donde un fresco muestra una ceremonia secreta. De pronto, la proyección se desvanece y la caja de música se rompe en mil pedazos, liberando una nube de polvo que forma la palabra \"¡SALVAME!\". Clara, aturdida, escucha un golpe fuerte detrás de ella...",
+            "prompt_visual": "A dark stone chamber with a glowing music box, a ghostly projection of a young woman in early 1900s attire, a fresco of a secret ceremony on the wall, dust forming the word \"SAVE ME\", dramatic lighting"
+        },
+        "",
+        {
+            "parte": 5,
+            "titulo_episodio": "El Último Susurro",
+            "narracion": "Clara se vuelve rápidamente, pero el corredor está vacío; solo el eco de sus propios pasos la acompaña. De repente, una corriente de aire arrastra una hoja de papel del suelo; al recogerla, descubre un último fragmento del diario: \"Solo el corazón puro puede romper el sello y liberar a los atrapados\". En la pared opuesta, una gran cerradura de hierro parece vibrar al compás de su latido. Con el corazón acelerado, Clara coloca su mano sobre la cerradura, y una energía luminosa la envuelve, revelando una puerta secreta que se abre hacia un jardín bajo la luna, donde cientos de sombras esperan. Una voz susurra: \"Gracias por liberar lo que nunca debió estar dormido\". Justo cuando Clara da el primer paso, una mano espectral la agarra del tobillo, arrastrándola hacia...",
+            "prompt_visual": "Moonlit secret garden beyond a hidden iron door, luminous energy surrounding a woman, spectral hands reaching from the shadows, ethereal atmosphere, high contrast moonlight"
+        }
+    ]
+}
