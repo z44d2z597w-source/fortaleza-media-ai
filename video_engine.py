@@ -3,10 +3,11 @@ import random
 import re
 import requests
 import urllib.parse
+import os
 from pathlib import Path
 
 # ==========================================================
-# FORTALEZA MEDIA AI 32.0 — DIRECTOR DE ESCENA
+# FORTALEZA MEDIA AI 32.1 — DIRECTOR DE ESCENA (CORREGIDO)
 # ==========================================================
 
 ARCHIVO_GUION = Path("guion.json")
@@ -21,13 +22,13 @@ def generar_con_groq(prompt):
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     payload = {
-        "model": "llama-3.3-70b-versatile", # Modelo más potente para planificación
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": "Eres un director de cine de élite. Planificas videos verticales de YouTube Shorts con una coherencia visual impecable."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.6, # Menos creatividad, más precisión
-        "response_format": {"type": "json_object"} # Forzamos salida JSON
+        "temperature": 0.6,
+        "response_format": {"type": "json_object"}
     }
     
     try:
@@ -44,7 +45,6 @@ def crear_plan_de_produccion():
     voz = random.choice(VOCES)
     print(f"[DIRECTOR] Género: {genero} | Voz: {voz}")
 
-    # El prompt es clave: pedimos personajes, escenario y storyboard.
     prompt = f"""
     Actúa como un director de cine. Crea un plan de producción para un video vertical (9:16) del género '{genero}'.
     El video debe durar entre 45 y 60 segundos.
@@ -52,27 +52,21 @@ def crear_plan_de_produccion():
     DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON CON ESTA ESTRUCTURA:
     {{
         "titulo": "Título atractivo del video",
-        "personajes": "Descripción física detallada y fija del personaje principal (ej: 'hombre de 40 años, gabardina gris, barba, ojos cansados').",
-        "escenario": "Descripción del lugar y la iluminación (ej: 'habitación de hotel abandonada, luz tenue, polvo en el aire, tonos sepia').",
+        "personajes": "Descripción física detallada y fija del personaje principal.",
+        "escenario": "Descripción del lugar y la iluminación.",
         "storyboard": [
             {{
                 "id": 1,
                 "duracion": 3,
                 "narracion": "Texto exacto que dirá la voz en off.",
-                "prompt_visual": "Prompt en inglés para la IA de video. Debe incluir la descripción del personaje y el escenario. Ej: 'Cinematic 8k, vertical 9:16, a man in a grey trench coat and beard, standing in a dusty abandoned hotel room, looking at a mirror, slow push-in shot.'"
-            }},
-            {{
-                "id": 2,
-                "duracion": 4,
-                "narracion": "Siguiente frase de la narración.",
-                "prompt_visual": "Siguiente prompt en inglés. Mantiene al mismo personaje y escenario. Ej: 'Cinematic 8k, vertical 9:16, close-up of the same man's face, reflection in the mirror, dramatic lighting, slow zoom.'"
+                "prompt_visual": "Prompt en inglés para la IA de video. Debe incluir la descripción del personaje y el escenario."
             }}
         ]
     }}
     
     REGLAS ESTRICTAS:
     1. La narración debe ser dramática y en español mexicano.
-    2. Cada 'prompt_visual' DEBE empezar con el estilo visual y la relación de aspecto ('Cinematic 8k, vertical 9:16,').
+    2. Cada 'prompt_visual' DEBE empezar con 'Cinematic 8k, vertical 9:16,'.
     3. Cada 'prompt_visual' DEBE repetir la descripción del personaje y del escenario para forzar la coherencia.
     4. La suma de las duraciones debe ser entre 45 y 60 segundos.
     5. El número de beats (storyboard) debe ser entre 8 y 12.
@@ -83,7 +77,6 @@ def crear_plan_de_produccion():
     
     if not plan or "storyboard" not in plan:
         print("[AVISO] Groq falló. Usando plan de respaldo.")
-        # Plan de respaldo si Groq falla
         plan = {
             "titulo": "El secreto de la habitación 404",
             "personajes": "un hombre joven, chaqueta de cuero negra, mirada nerviosa",
