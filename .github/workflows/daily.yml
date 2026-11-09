@@ -34,28 +34,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generar video
+      - name: Generar video (Motor Titán 13.0)
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          MAGIC_HOUR_API_KEY: ${{ secrets.MAGIC_HOUR_API_KEY }}
         run: python main.py
 
-      - name: Persistir historial de temas
+      - name: Guardar Memoria Evolutiva e Historial
         if: always()
         continue-on-error: true
         run: |
-          if [ ! -f historial_temas.json ]; then
-            echo "No existe historial_temas.json; nada que persistir."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add historial_temas.json
+          
+          if [ -f historial_temas.json ]; then
+            git add historial_temas.json
+          fi
+          
+          if [ -f config_edicion.json ]; then
+            git add config_edicion.json
+          fi
+          
           if git diff --cached --quiet; then
-            echo "Sin cambios en el historial."
+            echo "Sin cambios en la memoria del sistema."
             exit 0
           fi
-          git commit -m "Actualizar historial_temas.json [skip ci]"
+          
+          git commit -m "Auto-mejora: Actualizar cerebro evolutivo e historial [skip ci]"
           git push
 
       - name: Detectar formato de salida
@@ -108,16 +112,15 @@ jobs:
               f.write(f"VIDEO_DESCRIPTION<<{delimiter}\n{descripcion}\n{delimiter}\n")
           PY
 
-      - name: Guardar copia del video
+      - name: Guardar copia del video y reportes
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
           path: |
             output/fortaleza_final.mp4
             output/fortaleza_short.mp4
-            output/fortaleza_largo.mp4
+            output/reporte_edicion.json
             output/estado_produccion.json
-            output/creditos_imagenes.txt
           retention-days: 7
           if-no-files-found: warn
 
@@ -133,9 +136,7 @@ jobs:
         run: |
           set -e
 
-          if [ "$FORMATO" = "horizontal" ] && [ -s output/fortaleza_largo.mp4 ]; then
-            VIDEO="output/fortaleza_largo.mp4"
-          elif [ -s output/fortaleza_short.mp4 ]; then
+          if [ -s output/fortaleza_short.mp4 ]; then
             VIDEO="output/fortaleza_short.mp4"
           elif [ -s output/fortaleza_final.mp4 ]; then
             VIDEO="output/fortaleza_final.mp4"
@@ -161,7 +162,7 @@ jobs:
           curl --silent --show-error --fail-with-body \
             --max-time 1800 \
             -X POST \
-            "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
+            "https://fortaleza-youtube-auth.z44d2z597w.dev/publicar" \
             -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
             -H "Content-Type: video/mp4" \
             -H "X-Video-Title: ${VIDEO_TITLE}" \
