@@ -38,5 +38,10 @@
         "titulo": "Tornado",
         "formato": "vertical",
         "creado": "2026-11-09T10:45:14.566713+00:00"
+    },
+    {
+        "titulo": "Agujero negro",
+        "formato": "horizontal",
+        "creado": "2026-11-09T10:45:59.571489+00:00"
     }
 ]
