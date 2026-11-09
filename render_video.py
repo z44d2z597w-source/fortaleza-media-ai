@@ -21,7 +21,7 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.0
+# FORTALEZA MEDIA AI 10.1
 # PATTERN INTERRUPTS + LOWER THIRDS + PROGRESS BAR
 # ==========================================================
 
@@ -42,14 +42,13 @@ PAUSA_MIN = 0.30
 CRF = "22"
 XFADE_DURACION = 0.40
 
-# Palabras que activan textos gigantes en pantalla
 PALABRAS_IMPACTO = [
     "increíble", "sorprendente", "misterio", "secreto", 
     "peligro", "jamás", "nunca", "impactante", "aterrador", 
     "asombroso", "oculto", "verdad", "ciencia", "descubrimiento"
 ]
 
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.0"}
+CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.1"}
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -243,22 +242,18 @@ def crear_lower_third(titulo, formato, acento, numero):
     imagen = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
     dibujo = ImageDraw.Draw(imagen)
     
-    # Posición: esquina inferior izquierda, encima de los subtítulos
     x = int(ancho * 0.06)
     y = int(alto * 0.68)
     ancho_lt = int(ancho * 0.75)
     alto_lt = int(alto * 0.12)
     
-    # Fondo semitransparente con borde de acento
     dibujo.rounded_rectangle(
         (x, y, x + ancho_lt, y + alto_lt),
         radius=15, fill=(0, 0, 0, 190),
         outline=(*color_rgb(acento), 255), width=4
     )
-    # Barra lateral de acento
     dibujo.rectangle((x, y, x + 10, y + alto_lt), fill=(*color_rgb(acento), 255))
     
-    # Texto
     font = fuente(int(ancho * 0.035), True)
     texto = titulo.upper()
     lineas = dividir_lineas(dibujo, texto, font, ancho_lt - 40)[:2]
@@ -361,30 +356,21 @@ def crear_toma(ffmpeg, recurso, destino, duracion, numero, formato, es_impacto=F
     es_video = recurso.endswith(".mp4")
     filtros = []
 
-    # 1. Escalado y recorte
     filtros.append(f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase,crop={int(ancho*1.2)}:{int(alto*1.2)}")
 
-    # 2. Zoom Punch (solo para fotos de impacto)
     if es_impacto and not es_video:
-        # Zoom de 1.5x a 1.0x en los primeros 15 frames (0.5s a 30fps)
         filtros.append("zoompan=z='if(lt(on,15),1.5-on/30,1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=" + f"{ancho}x{alto}:fps={FPS}")
     elif not es_video:
-        # Zoom lento normal
         filtros.append(f"zoompan=z='min(zoom+0.0015,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={FPS}")
     else:
-        # Para video, solo escalar al tamaño final
         filtros.append(f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}")
 
-    # 3. Etalonaje cinematográfico
     filtros.append("eq=contrast=1.15:brightness=-0.02:saturation=1.25:gamma=0.98,curves=preset=medium_contrast,unsharp=5:5:0.6:5:5:0.0")
 
-    # 4. Glitch Pattern Interrupt (solo para el clip de impacto)
     if es_impacto:
         filtros.append("rgbashift=rh=8:bh=-8:enable='lt(t,0.3)',chromashift=cbh=5:crh=-5:enable='lt(t,0.3)'")
 
-    # 5. Formato final
     filtros.append("setsar=1,format=yuv420p")
-
     filtro_str = ",".join(filtros)
 
     if es_video:
@@ -415,13 +401,11 @@ def unir_escenas_xfade(ffmpeg, archivos, duraciones, destino):
     ejecutar(cmd)
 
 def mezclar_audio_y_barra(ffmpeg, video, musica, lista_whoosh, destino, duracion_total):
-    # Construir filtro de audio
     filtro_audio = "[1:a]volume=0.10[musica];[0:a]volume=1.0[voz];[voz][musica]amix=inputs=2:duration=first[base];"
     for i in range(len(lista_whoosh)):
         filtro_audio += f"[{i+2}:a]volume=0.5[w{i}];[base][w{i}]amix=inputs=2:duration=first[base];"
     filtro_audio += "[base]alimiter=limit=0.95[audio]"
 
-    # Construir filtro de video (barra de progreso)
     filtro_video = f"[0:v]vignette=PI/5,noise=alls=5:allf=t+u,eq=contrast=1.05:saturation=1.15,drawbox=x=0:y=h-8:w='iw*t/{duracion_total}':h=8:color=white@0.6:t=fill,format=yuv420p[vout]"
 
     filtro_total = filtro_video + ";" + filtro_audio
@@ -447,7 +431,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.0 — PATTERN INTERRUPTS\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.1 — PATTERN INTERRUPTS\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -460,7 +444,6 @@ async def crear_video():
         cortes = calcular_cortes(palabras, duracion)
         num_tomas = max(1, len(cortes) - 1)
 
-        # 1. Material
         clips_v = buscar_clips(titulo, narracion, numero, formato)
         recursos = [c["archivo"] for c in clips_v]
         if len(recursos) < num_tomas:
@@ -473,7 +456,6 @@ async def crear_video():
 
         recursos_asignados = asignar_recursos(recursos, num_tomas)
         
-        # 2. Tomas (la primera con zoom punch y glitch)
         tomas = []
         for i in range(num_tomas):
             dur = cortes[i + 1] - cortes[i]
@@ -481,13 +463,11 @@ async def crear_video():
             toma = RECURSOS / f"toma_{numero:02d}_{i:02d}.mp4"
             crear_toma(ffmpeg, recursos_asignados[i], toma, dur, numero*10+i, formato, es_impacto=(i==0))
             tomas.append(str(toma))
-            if i > 0: whooshes.append((whoosh_base, 0)) # Placeholder, se calcula después
+            if i > 0: whooshes.append((whoosh_base, 0))
 
         visual = RECURSOS / f"visual_{numero:02d}.mp4"
         concatenar_tomas(ffmpeg, tomas, visual, RECURSOS / f"lista_{numero:02d}.txt")
 
-        # 3. Subtítulos y lower third
-        # (Para simplificar, mantenemos los subtítulos de la 9.0)
         subtitulos = []
         grupos, grupo = [], []
         for p in palabras:
@@ -512,11 +492,9 @@ async def crear_video():
             imagen.save(ruta)
             subtitulos.append({"archivo": str(ruta), "inicio": inicio, "fin": fin})
 
-        # Lower third
         acento = PALETAS[numero % len(PALETAS)][2]
         lt_path = crear_lower_third(str(escena.get("titulo", titulo)), formato, acento, numero)
 
-        # 4. Componer escena (Visual + Subtítulos + Lower Third + Textos Gigantes)
         overlays_texto = []
         for p in palabras:
             palabra_limpia = re.sub(r"[^\w]", "", p["texto"].lower())
@@ -532,21 +510,20 @@ async def crear_video():
         filtros, actual = [], "[0:v]"
         idx_entrada = 2
         for sub in subtitulos:
-            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t,{sub['inicio']:.3f},{sub['fin']:.3f})'[v{idx_entrada}]")
+            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:eof_action=pass:shortest=1:enable='between(t,{sub['inicio']:.3f},{sub['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
-        # Lower Third animado (deslizar desde la izquierda en 0.5s)
+        # Lower Third animado
         lt_idx = idx_entrada
-        filtros.append(f"{actual}[{lt_idx}:v]overlay=x='if(lt(t,0),-w,if(lt(t,0.5),-w+t*2*w,0))':y=0:enable='between(t,0,4)'[v_lt]")
+        filtros.append(f"{actual}[{lt_idx}:v]overlay=shortest=1:x='if(lt(t,0),-w,if(lt(t,0.5),-w+t*2*w,0))':y=0:enable='between(t,0,4)'[v_lt]")
         actual = "[v_lt]"; idx_entrada += 1
 
         for txt in overlays_texto:
-            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t,{txt['inicio']:.3f},{txt['fin']:.3f})'[v{idx_entrada}]")
+            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:shortest=1:enable='between(t,{txt['inicio']:.3f},{txt['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
         if not filtros: filtros = ["[0:v]null[vfinal]"]; actual = "[vfinal]"
         else: 
-            # La última salida se renombra a vfinal
             filtros[-1] = filtros[-1].replace(f"[v{idx_entrada-1}]", "[vfinal]")
             actual = "[vfinal]"
 
@@ -558,7 +535,6 @@ async def crear_video():
         duraciones.append(duracion_media(ffmpeg, escena_final))
         print(f"[ESCENA] Terminada: {duraciones[-1]:.2f}s")
 
-    # Unir todo
     print("\n[FINAL] Uniendo escenas...")
     video_base = OUTPUT / "video_base.mp4"
     if len(clips) > 1: unir_escenas_xfade(ffmpeg, clips, duraciones, video_base)
@@ -567,7 +543,6 @@ async def crear_video():
     duracion_total = duracion_media(ffmpeg, video_base)
     musica = crear_musica(ffmpeg, max(10, int(duracion_total) + 5))
 
-    # Whooshes rítmicos cada 2.5s (aproximación)
     lista_whooshes_abs = []
     t = 1.5
     while t < duracion_total - 1:
