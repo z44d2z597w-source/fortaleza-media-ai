@@ -3,192 +3,370 @@ import asyncio
 import json
 import os
 import sys
+import time
 import traceback
-from datetime import datetime, timezone
 from pathlib import Path
+from datetime import datetime, timezone
 
 from video_engine import guardar_guion
 from render_video import crear_video
 
 
-BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output"
-GUION_FILE = BASE_DIR / "guion.json"
-PRODUCCION_FILE = OUTPUT_DIR / "produccion.json"
+# ==========================================================
+# FORTALEZA MEDIA AI
+# CONTROLADOR PRINCIPAL DE PRODUCCIÓN
+# ==========================================================
 
-ARCHIVOS_SALIDA = [
-    OUTPUT_DIR / "fortaleza_final.mp4",
-    OUTPUT_DIR / "fortaleza_short.mp4",
-    OUTPUT_DIR / "fortaleza_video.mp4",
-]
+NOMBRE = "FORTALEZA MEDIA AI"
+VERSION = "4.0"
+
+ARCHIVO_GUION = Path("guion.json")
+CARPETA_OUTPUT = Path("output")
+ARCHIVO_VIDEO = CARPETA_OUTPUT / "fortaleza_short.mp4"
+ARCHIVO_ESTADO = CARPETA_OUTPUT / "estado_produccion.json"
+
+# Límite preventivo para evitar archivos demasiado grandes
+# antes de enviarlos al sistema de publicación.
+MAX_MB = float(os.getenv("FORTALEZA_MAX_MB", "85"))
+MAX_BYTES = int(MAX_MB * 1024 * 1024)
+
+IDIOMA_PERMITIDO = "es-MX"
 
 
-def imprimir_encabezado():
-    print("=" * 60)
-    print("             FORTALEZA MEDIA AI")
-    print("          SISTEMA DE PRODUCCIÓN")
-    print("=" * 60)
+# ==========================================================
+# REGISTRO DE PRODUCCIÓN
+# ==========================================================
+
+def registrar(mensaje, nivel="INFO"):
+    hora = datetime.now().strftime("%H:%M:%S")
+    print(f"[{hora}] [{nivel}] {mensaje}", flush=True)
 
 
-def cargar_y_validar_guion():
-    if not GUION_FILE.exists():
+def guardar_estado(estado, detalles=None):
+    CARPETA_OUTPUT.mkdir(parents=True, exist_ok=True)
+
+    informacion = {
+        "proyecto": NOMBRE,
+        "version": VERSION,
+        "estado": estado,
+        "actualizado": datetime.now(timezone.utc).isoformat(),
+        "detalles": detalles or {}
+    }
+
+    ARCHIVO_ESTADO.write_text(
+        json.dumps(
+            informacion,
+            ensure_ascii=False,
+            indent=4
+        ),
+        encoding="utf-8"
+    )
+
+
+# ==========================================================
+# VALIDACIÓN DEL GUION
+# ==========================================================
+
+def cargar_y_validar_guion(guion_generado=None):
+
+    if not ARCHIVO_GUION.exists():
         raise FileNotFoundError(
-            "No se encontró guion.json después de ejecutar el motor editorial."
+            "No se encontró guion.json después de generar el guion."
         )
 
-    with GUION_FILE.open("r", encoding="utf-8") as archivo:
+    with ARCHIVO_GUION.open("r", encoding="utf-8") as archivo:
         guion = json.load(archivo)
 
     if not isinstance(guion, dict):
-        raise ValueError("El guion generado no tiene una estructura válida.")
+        raise ValueError("El guion debe ser un objeto JSON.")
 
     titulo = str(guion.get("titulo", "")).strip()
+
+    if len(titulo) < 5:
+        raise ValueError("El título del video está vacío o es demasiado corto.")
+
     escenas = guion.get("escenas", [])
 
-    if not titulo:
-        raise ValueError("El guion no contiene un título.")
-
     if not isinstance(escenas, list) or not escenas:
-        raise ValueError("El guion no contiene escenas para producir.")
+        raise ValueError("El guion no contiene escenas válidas.")
+
+    escenas_validas = []
 
     for numero, escena in enumerate(escenas, start=1):
-        if not isinstance(escena, dict):
-            raise ValueError(f"La escena {numero} tiene un formato inválido.")
 
-        narracion = str(escena.get("narracion", "")).strip()
+        if not isinstance(escena, dict):
+            continue
+
+        narracion = str(
+            escena.get("narracion", "")
+        ).strip()
 
         if not narracion:
-            raise ValueError(
-                f"La escena {numero} no contiene narración."
-            )
+            continue
+
+        escenas_validas.append({
+            **escena,
+            "numero": numero,
+            "narracion": narracion
+        })
+
+    if not escenas_validas:
+        raise ValueError("No hay narraciones utilizables.")
+
+    guion["titulo"] = titulo
+    guion["idioma"] = guion.get(
+        "idioma",
+        IDIOMA_PERMITIDO
+    )
+
+    guion["escenas"] = escenas_validas
+
+    if not isinstance(guion.get("descripcion"), str):
+        guion["descripcion"] = (
+            f"{titulo}\n\n"
+            "Descubre más curiosidades con FORTALEZA MEDIA AI."
+        )
+
+    if not isinstance(guion.get("hashtags"), list):
+        guion["hashtags"] = [
+            "#Curiosidades",
+            "#Ciencia",
+            "#FORTALEZAMEDIA"
+        ]
+
+    # Guardar la versión validada.
+    ARCHIVO_GUION.write_text(
+        json.dumps(
+            guion,
+            ensure_ascii=False,
+            indent=4
+        ),
+        encoding="utf-8"
+    )
 
     return guion
 
 
-def localizar_video(resultado=None):
-    candidatos = []
+# ==========================================================
+# PREPARACIÓN DEL ENTORNO
+# ==========================================================
 
-    if isinstance(resultado, (str, Path)):
-        candidatos.append(Path(resultado))
+def preparar_entorno():
 
-    elif isinstance(resultado, dict):
-        for clave in ("archivo", "output", "path", "video"):
-            valor = resultado.get(clave)
-            if valor:
-                candidatos.append(Path(valor))
-
-    candidatos.extend(ARCHIVOS_SALIDA)
-
-    for archivo in candidatos:
-        if not archivo.is_absolute():
-            archivo = BASE_DIR / archivo
-
-        if archivo.is_file() and archivo.stat().st_size > 0:
-            return archivo
-
-    raise FileNotFoundError(
-        "El renderizador terminó, pero no se encontró ningún MP4 válido "
-        "en la carpeta output."
+    CARPETA_OUTPUT.mkdir(
+        parents=True,
+        exist_ok=True
     )
 
+    (CARPETA_OUTPUT / "recursos").mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-def guardar_informe(guion, video):
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    registrar("Entorno de producción preparado.")
 
-    tamano = video.stat().st_size
-    formato = str(guion.get("formato", "YouTube Shorts 9:16"))
 
-    informe = {
-        "proyecto": "FORTALEZA MEDIA AI",
-        "estado": "produccion_completada",
-        "titulo": guion.get("titulo", ""),
-        "descripcion": guion.get("descripcion", ""),
-        "idioma": guion.get("idioma", "es-MX"),
-        "formato": formato,
-        "escenas": len(guion.get("escenas", [])),
-        "archivo": str(video.relative_to(BASE_DIR)),
-        "tamano_bytes": tamano,
-        "tamano_mb": round(tamano / (1024 * 1024), 2),
-        "fecha_utc": datetime.now(timezone.utc).isoformat(),
-        "publicado": False,
-    }
+# ==========================================================
+# GENERACIÓN DEL CONTENIDO
+# ==========================================================
 
-    temporal = PRODUCCION_FILE.with_suffix(".tmp")
+def generar_guion():
 
-    with temporal.open("w", encoding="utf-8") as archivo:
-        json.dump(
-            informe,
-            archivo,
-            ensure_ascii=False,
-            indent=4
+    registrar("Seleccionando tema automáticamente...")
+
+    resultado = guardar_guion()
+
+    guion = cargar_y_validar_guion(resultado)
+
+    registrar(f"Tema seleccionado: {guion['titulo']}")
+    registrar(f"Idioma: {guion['idioma']}")
+    registrar(f"Formato: {guion.get('formato', 'No especificado')}")
+    registrar(f"Escenas: {len(guion['escenas'])}")
+
+    return guion
+
+
+# ==========================================================
+# MOTOR DE RENDERIZADO
+# ==========================================================
+
+async def producir_video():
+
+    registrar("Iniciando motor de renderizado...")
+
+    # Evitar confundir un video anterior con uno nuevo.
+    if ARCHIVO_VIDEO.exists():
+        ARCHIVO_VIDEO.unlink()
+        registrar("Archivo anterior retirado.")
+
+    inicio = time.time()
+
+    await crear_video()
+
+    tiempo = round(time.time() - inicio, 2)
+
+    if not ARCHIVO_VIDEO.exists():
+        raise FileNotFoundError(
+            "El motor terminó, pero no generó el video esperado: "
+            f"{ARCHIVO_VIDEO}"
         )
 
-    temporal.replace(PRODUCCION_FILE)
+    tamano = ARCHIVO_VIDEO.stat().st_size
 
-    return informe
+    if tamano <= 0:
+        raise RuntimeError("El archivo de video está vacío.")
 
+    if tamano > MAX_BYTES:
+        raise RuntimeError(
+            f"El video pesa {tamano / 1048576:.2f} MB. "
+            f"Supera el límite preventivo de {MAX_MB:.0f} MB."
+        )
+
+    # Comprobar que el archivo tiene estructura básica MP4.
+    with ARCHIVO_VIDEO.open("rb") as archivo:
+        cabecera = archivo.read(16)
+
+    if b"ftyp" not in cabecera:
+        raise RuntimeError(
+            "El archivo generado no parece ser un MP4 válido."
+        )
+
+    registrar("Renderizado completado correctamente.")
+    registrar(f"Duración del proceso: {tiempo} segundos.")
+    registrar(f"Tamaño final: {tamano / 1048576:.2f} MB")
+
+    return {
+        "archivo": str(ARCHIVO_VIDEO),
+        "tamano_mb": round(tamano / 1048576, 2),
+        "tiempo_segundos": tiempo
+    }
+
+
+# ==========================================================
+# CONTROL DE CALIDAD
+# ==========================================================
+
+def control_calidad(guion, resultado):
+
+    if not ARCHIVO_VIDEO.exists():
+        raise RuntimeError("No existe el video para control de calidad.")
+
+    if len(guion["escenas"]) == 0:
+        raise RuntimeError("El guion no contiene escenas.")
+
+    if not guion["titulo"].strip():
+        raise RuntimeError("El título no es válido.")
+
+    if resultado["tamano_mb"] <= 0:
+        raise RuntimeError("El tamaño del video no es válido.")
+
+    registrar("Control de calidad básico aprobado.")
+
+    return True
+
+
+# ==========================================================
+# PRODUCCIÓN COMPLETA
+# ==========================================================
 
 async def iniciar_fortaleza():
-    imprimir_encabezado()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n[1/5] Iniciando motor editorial...")
+    inicio = time.time()
 
-    guion_generado = guardar_guion()
+    print("\n" + "=" * 58)
+    print(f"       {NOMBRE} — MOTOR {VERSION}")
+    print("       PRODUCCIÓN AUTOMÁTICA DE CONTENIDO")
+    print("=" * 58 + "\n")
 
-    if guion_generado is None:
-        print("El motor editorial no devolvió el guion.")
-        guion = cargar_y_validar_guion()
-    else:
-        guion = guion_generado
+    guardar_estado("iniciando")
 
-    print("[2/5] Validando guion...")
-    guion = cargar_y_validar_guion()
+    try:
 
-    print("\nTÍTULO:", guion["titulo"])
-    print("IDIOMA:", guion.get("idioma", "es-MX"))
-    print("FORMATO:", guion.get("formato", "No especificado"))
-    print("ESCENAS:", len(guion["escenas"]))
+        preparar_entorno()
 
-    print("\n[3/5] Iniciando producción audiovisual...")
-    resultado = await crear_video()
+        # 1. Generar contenido.
+        guion = generar_guion()
 
-    print("\n[4/5] Verificando archivo de video...")
-    video = localizar_video(resultado)
+        guardar_estado(
+            "guion_generado",
+            {
+                "titulo": guion["titulo"],
+                "escenas": len(guion["escenas"])
+            }
+        )
 
-    tamano = video.stat().st_size
+        # 2. Crear el video.
+        resultado = await producir_video()
 
-    if tamano < 1024:
-        raise RuntimeError("El archivo generado es demasiado pequeño.")
+        # 3. Revisar el resultado.
+        control_calidad(
+            guion,
+            resultado
+        )
 
-    print("Video:", video)
-    print("Tamaño:", round(tamano / (1024 * 1024), 2), "MB")
+        tiempo_total = round(
+            time.time() - inicio,
+            2
+        )
 
-    print("\n[5/5] Guardando informe de producción...")
-    informe = guardar_informe(guion, video)
+        # 4. Registrar producción terminada.
+        guardar_estado(
+            "completado",
+            {
+                "titulo": guion["titulo"],
+                "archivo": resultado["archivo"],
+                "tamano_mb": resultado["tamano_mb"],
+                "tiempo_total": tiempo_total,
+                "escenas": len(guion["escenas"])
+            }
+        )
 
-    print("\n" + "=" * 60)
-    print("          PRODUCCIÓN FINALIZADA")
-    print("=" * 60)
-    print("Título:", informe["titulo"])
-    print("Formato:", informe["formato"])
-    print("Archivo:", informe["archivo"])
-    print("Peso:", informe["tamano_mb"], "MB")
-    print("Publicado: NO")
-    print("Informe:", PRODUCCION_FILE)
-    print("=" * 60)
+        print("\n" + "=" * 58)
+        print("       PRODUCCIÓN FINALIZADA")
+        print("=" * 58)
+        print(f"Título: {guion['titulo']}")
+        print(f"Archivo: {resultado['archivo']}")
+        print(f"Tamaño: {resultado['tamano_mb']} MB")
+        print(f"Tiempo: {tiempo_total} segundos")
+        print("=" * 58 + "\n")
 
+        registrar("FORTALEZA MEDIA AI terminó correctamente.")
+
+        return True
+
+    except Exception as error:
+
+        guardar_estado(
+            "error",
+            {
+                "mensaje": str(error),
+                "tipo": type(error).__name__
+            }
+        )
+
+        registrar(str(error), "ERROR")
+
+        traceback.print_exc()
+
+        raise
+
+
+# ==========================================================
+# PUNTO DE ENTRADA
+# ==========================================================
 
 if __name__ == "__main__":
+
     try:
         asyncio.run(iniciar_fortaleza())
 
     except KeyboardInterrupt:
-        print("\nProducción interrumpida.")
+        registrar("Producción interrumpida.", "WARNING")
         sys.exit(130)
 
-    except Exception as error:
-        print("\nERROR EN FORTALEZA MEDIA AI")
-        print(str(error))
-        traceback.print_exc()
+    except Exception:
+        registrar(
+            "La producción terminó con errores.",
+            "ERROR"
+        )
         sys.exit(1)
