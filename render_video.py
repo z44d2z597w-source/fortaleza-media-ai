@@ -21,8 +21,8 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.3
-# CORRECCIÓN DEFINITIVA: SIN SHORTEST EN OVERLAY, CON -t
+# FORTALEZA MEDIA AI 10.4
+# CORRECCIÓN: COMAS ESCAPADAS EN enable + FRAMERATE EN PNG
 # ==========================================================
 
 FPS = 30
@@ -48,7 +48,7 @@ PALABRAS_IMPACTO = [
     "asombroso", "oculto", "verdad", "ciencia", "descubrimiento"
 ]
 
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.3"}
+CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.4"}
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -431,7 +431,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.3 — CORRECCIÓN FINAL\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.4\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -503,23 +503,22 @@ async def crear_video():
                 overlays_texto.append({"archivo": img_txt, "inicio": p["inicio"], "fin": min(duracion, p["fin"] + 0.4)})
 
         cmd = [ffmpeg, "-y", "-i", str(visual), "-i", str(audio)]
-        for sub in subtitulos: cmd.extend(["-loop", "1", "-i", sub["archivo"]])
-        cmd.extend(["-loop", "1", "-i", lt_path])
-        for txt in overlays_texto: cmd.extend(["-loop", "1", "-i", txt["archivo"]])
+        for sub in subtitulos: cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
+        cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", lt_path])
+        for txt in overlays_texto: cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", txt["archivo"]])
 
         filtros, actual = [], "[0:v]"
         idx_entrada = 2
         for sub in subtitulos:
-            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t,{sub['inicio']:.3f},{sub['fin']:.3f})'[v{idx_entrada}]")
+            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t\\,{sub['inicio']:.3f}\\,{sub['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
-        # Lower Third animado (sin shortest)
         lt_idx = idx_entrada
-        filtros.append(f"{actual}[{lt_idx}:v]overlay=x='if(lt(t,0),-w,if(lt(t,0.5),-w+t*2*w,0))':y=0:enable='between(t,0,4)'[v_lt]")
+        filtros.append(f"{actual}[{lt_idx}:v]overlay=x='if(lt(t\\,0)\\,-w\\,if(lt(t\\,0.5)\\,-w+t*2*w\\,0))':y=0:enable='between(t\\,0\\,4)'[v_lt]")
         actual = "[v_lt]"; idx_entrada += 1
 
         for txt in overlays_texto:
-            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t,{txt['inicio']:.3f},{txt['fin']:.3f})'[v{idx_entrada}]")
+            filtros.append(f"{actual}[{idx_entrada}:v]overlay=0:0:enable='between(t\\,{txt['inicio']:.3f}\\,{txt['fin']:.3f})'[v{idx_entrada}]")
             actual = f"[v{idx_entrada}]"; idx_entrada += 1
         
         if not filtros: filtros = ["[0:v]null[vfinal]"]; actual = "[vfinal]"
@@ -528,7 +527,6 @@ async def crear_video():
             actual = "[vfinal]"
 
         escena_final = RECURSOS / f"escena_final_{numero:02d}.mp4"
-        # Se usa -t en lugar de -shortest para limitar la duración
         cmd.extend(["-filter_complex", ";".join(filtros), "-map", actual, "-map", "1:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", "-t", f"{duracion:.3f}", "-f", "mp4", str(escena_final)])
         ejecutar(cmd)
         
