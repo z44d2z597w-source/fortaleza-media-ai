@@ -6,7 +6,7 @@ import requests, edge_tts, imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # ==========================================================
-# FORTALEZA MEDIA AI 30.0 — EDICIÓN TITÁN RESTAURADA
+# FORTALEZA MEDIA AI 31.0 — COHERENCIA SEMÁNTICA TOTAL
 # ==========================================================
 
 FPS = 30
@@ -51,13 +51,25 @@ def calcular_cortes(palabras, duracion_total):
     else: resultado[-1] = duracion_total
     return resultado
 
-# --- GENERADORES ---
-def buscar_video_stock(prompt, escena, toma):
+# --- EXTRACCIÓN DE PALABRAS CLAVE (Para que el video concuerde) ---
+def extraer_palabras_clave(texto):
+    # Quitamos palabras vacías o conectores para que Pixabay busque solo lo importante
+    palabras_vacias = {"para", "porque", "sobre", "desde", "hasta", "donde", "cuando", "también", "tienen", "puede", "entre", "pero", "algo", "todo", "cada", "hacia", "después", "durante", "del", "las", "los", "una", "uno", "con", "sin", "por", "que", "sus", "hay", "más", "muy", "hoy"}
+    palabras = re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}", texto.lower())
+    filtradas = [p for p in palabras if p not in palabras_vacias]
+    # Nos quedamos con las 3 palabras más largas (suelen ser las más descriptivas)
+    filtradas.sort(key=len, reverse=True)
+    return " ".join(list(dict.fromkeys(filtradas))[:3])
+
+# --- GENERADORES VISUALES ---
+def buscar_video_stock(narracion, escena, toma):
     key = os.environ.get("PIXABAY_API_KEY")
     if key:
         try:
-            query = " ".join(re.findall(r"[a-zA-Z]{4,}", prompt)[:3])
-            resp = requests.get("https://pixabay.com/api/videos/", params={"key": key, "q": query, "orientation": "vertical", "per_page": 3}, timeout=15).json()
+            query = extraer_palabras_clave(narracion)
+            print(f"    -> [STOCK] Buscando video de: '{query}'")
+            resp = requests.get("https://pixabay.com/api/videos/", params={"key": key, "q": query, "orientation": "vertical", "per_page": 5}, timeout=15).json()
+            
             for hit in resp.get("hits", []):
                 url = hit.get("videos", {}).get("medium", {}).get("url")
                 if url:
@@ -66,19 +78,23 @@ def buscar_video_stock(prompt, escena, toma):
                         with open(ruta, "wb") as f:
                             for chunk in r.iter_content(8192): f.write(chunk)
                     if os.path.getsize(ruta) > 15000:
-                        print("    -> [PIXABAY] Video real.")
+                        print(f"    -> [PIXABAY] Video real conseguido.")
                         return str(ruta), True
         except Exception: pass
     return None
 
-def generar_imagen_ia(prompt, escena, toma):
+def generar_imagen_ia(narracion, escena, toma):
     try:
-        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={FORMATO['ancho']}&height={FORMATO['alto']}&nologo=true"
+        # Añadimos una semilla aleatoria para que NUNCA se repita la misma imagen en bucle
+        seed = random.randint(1, 999999)
+        prompt = f"Cinematic 8k, dramatic lighting, {narracion[:100]}"
+        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={FORMATO['ancho']}&height={FORMATO['alto']}&nologo=true&seed={seed}"
+        
         resp = requests.get(url, timeout=45)
         img = Image.open(BytesIO(resp.content)); img.verify()
         ruta = RECURSOS / f"poll_{escena}_{toma}.jpg"
         with open(ruta, "wb") as f: f.write(resp.content)
-        print("    -> [POLLINATIONS] Imagen IA.")
+        print(f"    -> [POLLINATIONS] Imagen IA generada (Seed: {seed}).")
         return str(ruta), False
     except Exception: return None
 
@@ -99,14 +115,13 @@ async def generar_voz(texto, ruta, voz_elegida):
         except Exception: pass
     raise RuntimeError("Fallo total de audio.")
 
-# --- RENDERIZADO DE TOMAS ---
+# --- RENDERIZADO ---
 def crear_toma(ffmpeg, ruta, destino, duracion, idx, es_video):
     if es_video:
-        # Recorte perfecto para videos
         filtros = [f"scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase", f"crop={FORMATO['ancho']}:{FORMATO['alto']}", "setsar=1", "format=yuv420p"]
         cmd = [ffmpeg, "-y", "-stream_loop", "-1", "-i", ruta, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
     else:
-        # Recorte perfecto para imágenes + Zoom agresivo
+        # Zoom agresivo para que las imágenes parezcan video
         movs = [
             ("min(zoom+0.0030,1.5)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
             ("min(zoom+0.0040,1.6)", "iw/2-(iw/zoom/2)+on*0.5", "ih/2-(ih/zoom/2)"),
@@ -122,7 +137,6 @@ def crear_toma(ffmpeg, ruta, destino, duracion, idx, es_video):
         cmd = [ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", ruta, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
     subprocess.run(cmd, check=True, capture_output=True)
 
-# --- GRÁFICOS (TEXTOS) ---
 def crear_subtitulos(marcas, escena_idx, dur_voz):
     grupos, grupo = [], []
     for p in marcas:
@@ -135,16 +149,12 @@ def crear_subtitulos(marcas, escena_idx, dur_voz):
     for i, g in enumerate(grupos):
         inicio, fin = max(0, g[0]["inicio"]), min(dur_voz, g[-1]["fin"] + 0.15)
         if fin <= inicio: continue
-        
         img = Image.new("RGBA", (FORMATO["ancho"], FORMATO["alto"]), (0,0,0,0))
         d = ImageDraw.Draw(img)
         font = obtener_fuente(int(FORMATO["ancho"] * 0.045), True)
         texto = " ".join(x["texto"] for x in g)
-        
-        # Cuadro de subtítulo
         y = int(FORMATO["alto"] * 0.82)
         d.text((FORMATO["ancho"]//2, y), texto, font=font, fill="white", anchor="mm", stroke_width=4, stroke_fill="#000000")
-        
         ruta = RECURSOS / f"sub_{escena_idx}_{i}.png"
         img.save(ruta)
         imgs.append({"archivo": str(ruta), "inicio": inicio, "fin": fin})
@@ -154,7 +164,6 @@ def crear_scroll_stopper():
     img = Image.new("RGBA", (FORMATO["ancho"], FORMATO["alto"]), (0,0,0,0))
     d = ImageDraw.Draw(img)
     font = obtener_fuente(int(FORMATO["ancho"] * 0.12), True)
-    # Letrero rojo
     d.rectangle((0, int(FORMATO["alto"]*0.35), FORMATO["ancho"], int(FORMATO["alto"]*0.55)), fill=(220, 20, 20, 230))
     d.text((FORMATO["ancho"]//2, int(FORMATO["alto"]*0.45)), "¡NO LO VAS\nA CREER!", font=font, fill="white", anchor="mm", align="center", stroke_width=6, stroke_fill="#000000")
     ruta = RECURSOS / "scroll.png"
@@ -183,15 +192,17 @@ async def crear_video():
         dur = obtener_duracion(ffmpeg, ruta_voz)
         cortes = calcular_cortes(marcas, dur)
         
-        # 1. Crear las tomas de video
         tomas = []
         for j in range(len(cortes)-1):
             d_toma = cortes[j+1] - cortes[j]
             if d_toma <= 0.4: continue
-            prompt = f"Cinematic 8k, dramatic lighting, vertical 9:16, {narracion[:100]}"
             
-            res = buscar_video_stock(prompt, i, j)
-            if not res: res = generar_imagen_ia(prompt, i, j)
+            # 1. Intentar buscar un video real que concuerde con la narración
+            res = buscar_video_stock(narracion, i, j)
+            
+            # 2. Si no hay video, generar una imagen IA única basada en la narración
+            if not res: 
+                res = generar_imagen_ia(narracion, i, j)
             
             if res:
                 recurso, es_video = res
@@ -199,19 +210,15 @@ async def crear_video():
                 crear_toma(ffmpeg, recurso, ruta_toma, d_toma, i*10+j, es_video)
                 tomas.append(str(ruta_toma))
 
-        # Unir tomas de la escena
         ruta_vis = RECURSOS / f"vis_{i}.mp4"
         with open(RECURSOS / f"list_{i}.txt", "w") as f:
             for t in tomas: f.write(f"file '{Path(t).resolve()}'\n")
         subprocess.run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(RECURSOS / f"list_{i}.txt"), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an", str(ruta_vis)], check=True, capture_output=True)
         
-        # 2. Añadir Subtítulos, Letrero y Audio a la Escena
         subtitulos = crear_subtitulos(marcas, i, dur)
         cmd_comp = [ffmpeg, "-y", "-i", str(ruta_vis), "-i", str(ruta_voz)]
         
         for sub in subtitulos: cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
-        
-        # Si es la escena 1, añadimos el letrero rojo
         if i == 0:
             cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", scroll_img])
             
@@ -229,25 +236,21 @@ async def crear_video():
         ruta_final_escena = RECURSOS / f"final_{i}.mp4"
         cmd_comp.extend(["-filter_complex", ";".join(filtros), "-map", actual, "-map", "1:a", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-t", f"{dur:.3f}", str(ruta_final_escena)])
         subprocess.run(cmd_comp, check=True, capture_output=True)
-        
         clips_finales.append(str(ruta_final_escena))
 
-    # 3. Unir todas las escenas con transición xfade
     print("\n[RENDER] Uniendo todas las escenas...")
     video_unido = OUTPUT / "base.mp4"
-    # (Uso de la función de unión simplificada)
     with open(OUTPUT / "all.txt", "w") as f:
         for c in clips_finales: f.write(f"file '{Path(c).resolve()}'\n")
     subprocess.run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(OUTPUT / "all.txt"), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(video_unido)], check=True, capture_output=True)
     
-    # 4. Barra de progreso final
     dur_total = obtener_duracion(ffmpeg, video_unido)
     destino = OUTPUT / "fortaleza_final.mp4"
     filtro_barra = f"[0:v]drawbox=x=0:y=h-10:w='iw*t/{dur_total}':h=10:color=red@0.9:t=fill[vout]"
     subprocess.run([ffmpeg, "-y", "-i", str(video_unido), "-filter_complex", filtro_barra, "-map", "[vout]", "-map", "0:a", "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-c:a", "copy", str(destino)], check=True, capture_output=True)
     
     shutil.copy2(destino, OUTPUT / "fortaleza_short.mp4")
-    print("\n✅ PRODUCCIÓN TITÁN COMPLETADA")
+    print("\n✅ PRODUCCIÓN COMPLETADA CON COHERENCIA")
     return str(destino)
 
 if __name__ == "__main__":
