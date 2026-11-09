@@ -88,7 +88,6 @@ async def generar_voz(texto, ruta, voz_elegida):
     raise RuntimeError("Fallo de audio")
 
 def crear_subtitulos(marcas, dur_voz, idx_cap):
-    # Subtítulos más espaciados para lectura cómoda en video largo
     grupos, grupo = [], []
     for p in marcas:
         grupo.append(p)
@@ -134,7 +133,6 @@ async def crear_long():
 
     print(f"--- GENERANDO VIDEO DOCUMENTAL: {guion['titulo']} ---")
     
-    # En un video largo, cada "beat" del storyboard es un capítulo o sección
     for idx, beat in enumerate(storyboard):
         print(f"\n[CAPÍTULO {idx+1}/{len(storyboard)}]")
         narracion = beat["narracion"]
@@ -165,8 +163,8 @@ async def crear_long():
         actual = "[bg]"
         
         if img_impacto:
-            # La imagen aparece de fondo durante todo el capítulo
-            filtros.append(f"[2:v]scale=1080:1920[img]")
+            # La imagen aparece de fondo durante todo el capítulo con un ligero zoom
+            filtros.append(f"[2:v]scale=1080:1920,zoompan=z='min(zoom+0.0005,1.1)':d=1:s=1080x1920:fps={FPS}[img]")
             filtros.append(f"{actual}[img]overlay=0:0:enable='between(t,0,{dur_voz})'[v_img]")
             actual = "[v_img]"
             offset = 1
