@@ -6,132 +6,105 @@ import urllib.parse
 import os
 from pathlib import Path
 
+# ==========================================================
+# FORTALEZA MEDIA AI 35.0 — CEREBRO DUAL (LARGO + CORTO)
+# ==========================================================
+
 ARCHIVO_GUION = Path("guion.json")
-ARCHIVO_HISTORIAL = Path("historial_creativo.json")
-
 GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana", "Conspiración tecnológica", "Suspenso policial", "Fantasía oscura"]
-GIROS = ["Un giro argumental que lo cambia todo", "Un final que conecta con el inicio", "Una revelación escalofriante", "Un secreto oculto en el objeto", "Una traición inesperada"]
 VOCES = ["es-MX-DaliaNeural", "es-MX-JorgeNeural"]
-
-def cargar_historial():
-    if ARCHIVO_HISTORIAL.exists():
-        try:
-            with open(ARCHIVO_HISTORIAL, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except: return []
-    return []
-
-def guardar_historial(titulo):
-    historial = cargar_historial()
-    historial.append(titulo)
-    historial = historial[-20:]
-    with open(ARCHIVO_HISTORIAL, "w", encoding="utf-8") as f:
-        json.dump(historial, f, ensure_ascii=False, indent=4)
 
 def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key: return None
+    if not api_key:
+        print("[GROQ] No hay clave configurada.")
+        return None
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [
-            {"role": "system", "content": "Eres un director de cine de élite. Planificas videos verticales para TikTok y YouTube Shorts."},
+            {"role": "system", "content": "Eres un guionista y director de cine de élite. Creas contenido altamente adictivo para YouTube y TikTok."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.9,
+        "temperature": 0.8,
         "response_format": {"type": "json_object"}
     }
     
     try:
-        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=90)
         respuesta.raise_for_status()
         return json.loads(respuesta.json()["choices"][0]["message"]["content"])
     except Exception as e:
         print(f"[GROQ] Error: {e}")
         return None
 
-def crear_plan_de_produccion():
+def crear_guion_dual():
     genero = random.choice(GENEROS)
-    giro = random.choice(GIROS)
     voz = random.choice(VOCES)
-    
-    # --- LÓGICA DE DURACIÓN VARIABLE ---
-    # 1 = Corto (TikTok rápido), 2 = Medio (Short estándar), 3 = Largo (Historia profunda)
-    duracion_tipo = random.choice([1, 2, 3])
-    
-    if duracion_tipo == 1:
-        duracion_objetivo = "15 a 25 segundos"
-        beats_objetivo = "3 a 4"
-    elif duracion_tipo == 2:
-        duracion_objetivo = "40 a 60 segundos"
-        beats_objetivo = "6 a 8"
-    else:
-        duracion_objetivo = "90 a 120 segundos"
-        beats_objetivo = "12 a 16"
+    print(f"[DIRECTOR] Creando obra maestra del género: {genero} | Voz: {voz}")
 
-    historial = cargar_historial()
-    temas_prohibidos = ", ".join(historial) if historial else "Ninguno"
-
-    print(f"[DIRECTOR] Género: {genero} | Duración: {duracion_objetivo} | Voz: {voz}")
-
+    # El prompt exige un guion largo por capítulos y un gancho corto
     prompt = f"""
-    Actúa como un director de cine. Crea un plan de producción para un video vertical (9:16) del género '{genero}'.
-    El video debe durar aproximadamente {duracion_objetivo}.
+    Escribe una historia original, dramática y altamente adictiva del género '{genero}'.
     
-    REGLAS DE CREATIVIDAD:
-    1. NO uses ninguno de estos temas anteriores: {temas_prohibidos}.
-    2. DEBES incluir este giro argumental: {giro}.
-    3. La historia debe ser 100% original y sorprendente.
-    4. Genera entre {beats_objetivo} beats (momentos) para el storyboard.
-
-    DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON CON ESTA ESTRUCTURA:
+    DEBES DEVOLVER UN OBJETO JSON CON EXACTAMENTE ESTA ESTRUCTURA:
     {{
-        "titulo": "Título atractivo y único",
-        "storyboard": [
+        "titulo": "Título impactante y único",
+        "gancho_corto": "Un texto de 100 a 150 palabras (para durar 40-60 segundos en TikTok). Debe ser lo más intrigante de la historia. Termina con una pregunta o llamado a la acción para que vean el video completo.",
+        "guion_largo": [
             {{
-                "id": 1,
-                "duracion": 3,
-                "narracion": "Texto exacto que dirá la voz en off.",
-                "prompt_visual": "Prompt en inglés para la IA. Debe incluir la descripción del personaje y el escenario."
+                "capitulo": 1,
+                "titulo_capitulo": "Nombre del capítulo",
+                "narracion": "Texto largo de 800 a 1000 palabras para este capítulo."
+            }},
+            {{
+                "capitulo": 2,
+                "titulo_capitulo": "Nombre del capítulo 2",
+                "narracion": "Texto largo de 800 a 1000 palabras..."
             }}
+            // ... Genera 5 capítulos en total para alcanzar los 40-60 minutos de duración total.
         ]
     }}
+    
+    REGLAS ESTRICTAS:
+    1. La historia debe ser un misterio o drama fascinante.
+    2. NO repitas temas de otros videos.
+    3. Escribe en español mexicano.
+    4. Asegúrate de que el JSON sea válido.
     """
 
     plan = generar_con_groq(prompt)
     
-    if not plan or "storyboard" not in plan:
+    if not plan or "guion_largo" not in plan:
         print("[AVISO] Groq falló. Usando plan de respaldo.")
-        # Plan de respaldo con duración media
         plan = {
-            "titulo": f"El enigma de {genero.lower()} #{random.randint(100,999)}",
-            "storyboard": [
-                {"id": 1, "duracion": 5, "narracion": "Hay algo que no cuadra en esta estación.", "prompt_visual": "Cinematic 8k, vertical 9:16, a tired detective in a brown coat, abandoned train station, fog."},
-                {"id": 2, "duracion": 5, "narracion": "Los relojes marcan la misma hora desde hace años.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of a broken clock, dust particles."},
-                {"id": 3, "duracion": 5, "narracion": "Pero hoy, uno de ellos se movió.", "prompt_visual": "Cinematic 8k, vertical 9:16, detective's hand touching a clock, dramatic lighting."},
-                {"id": 4, "duracion": 5, "narracion": "Y el mensaje que dejó no era para él.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of a mysterious note in hand."},
-                {"id": 5, "duracion": 5, "narracion": "Alguien más está jugando con el tiempo.", "prompt_visual": "Cinematic 8k, vertical 9:16, detective looking at a shadowy figure in the fog."},
-                {"id": 6, "duracion": 5, "narracion": "Y esta vez, el reloj corre en su contra.", "prompt_visual": "Cinematic 8k, vertical 9:16, detective running through the abandoned station."}
+            "titulo": "El Enigma de la Estación Abandonada",
+            "gancho_corto": "Hay algo que no cuadra en esta estación. Los relojes marcan la misma hora desde hace años. Pero hoy, uno de ellos se movió. Y el mensaje que dejó no era para él. Alguien más está jugando con el tiempo. ¿Te atreves a descubrir la verdad? Ve al video completo en mi canal.",
+            "guion_largo": [
+                {"capitulo": 1, "titulo_capitulo": "El Reloj Roto", "narracion": "Era una noche fría y lluviosa cuando el detective..."},
+                {"capitulo": 2, "titulo_capitulo": "Las Sombras", "narracion": "Los susurros en el andén no venían de ninguna persona viva..."},
+                {"capitulo": 3, "titulo_capitulo": "El Mensaje", "narracion": "El papel estaba firmado con su propio nombre, pero la letra no era suya..."},
+                {"capitulo": 4, "titulo_capitulo": "El Túnel", "narracion": "Al fondo del túnel, una luz parpadeaba en código morse..."},
+                {"capitulo": 5, "titulo_capitulo": "La Verdad", "narracion": "Todo era una simulación creada para atrapar a su mente..."}
             ]
         }
-
-    guardar_historial(plan["titulo"])
 
     return {
         "titulo": plan["titulo"],
         "formato": "vertical",
         "voz": voz,
-        "director_notes": {
-            "storyboard": plan["storyboard"]
-        }
+        "gancho_corto": plan["gancho_corto"],
+        "guion_largo": plan["guion_largo"]
     }
 
 def guardar_guion():
-    guion = crear_plan_de_produccion()
+    guion = crear_guion_dual()
     with open(ARCHIVO_GUION, "w", encoding="utf-8") as f:
         json.dump(guion, f, ensure_ascii=False, indent=4)
-    print(f"PLAN DE PRODUCCIÓN GUARDADO: {guion['titulo']}")
+    print(f"PLAN DUAL GUARDADO: {guion['titulo']}")
+    print(f"  -> Gancho Corto generado (para TikTok/Shorts).")
+    print(f"  -> Guion Largo generado con {len(guion['guion_largo'])} capítulos.")
 
 if __name__ == "__main__":
     guardar_guion()
