@@ -22,8 +22,7 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 14.1 — VIRAL TITÁN
-# MÁXIMA RETENCIÓN + MÁXIMA ROBUSTEZ TÉCNICA
+# FORTALEZA MEDIA AI 14.2 — VIRAL TITÁN (ERRORES CORREGIDOS)
 # ==========================================================
 
 FPS = 30
@@ -38,7 +37,6 @@ REPORTE_PRODUCCION = OUTPUT / "reporte_edicion.json"
 MAX_ESCENAS = 20
 IMAGENES_POR_ESCENA = 6
 
-# Configuración por defecto del sistema evolutivo
 CONFIG_DEFECTO = {
     "corte_min": 1.5,
     "corte_max": 3.5,
@@ -60,7 +58,7 @@ PALABRAS_IMPACTO = [
 ]
 
 CABECERAS = {
-    "User-Agent": "FortalezaMediaAI/14.1 (https://github.com/z44d2z597w-source/fortaleza-media-ai) python-requests"
+    "User-Agent": "FortalezaMediaAI/14.2 (https://github.com/z44d2z597w-source/fortaleza-media-ai) python-requests"
 }
 
 PALETAS = [
@@ -98,23 +96,19 @@ def cargar_configuracion_evolutiva():
 def evaluar_y_mutar(config, metricas):
     print("\n[EVOLUCIÓN] Evaluando calidad de la edición viral...")
     
-    # 1. Evaluación de Pacing (Ritmo)
     score_pacing = 50
-    if metricas["promedio_toma"] < 2.2: score_pacing += 35  # Excelente ritmo viral
+    if metricas["promedio_toma"] < 2.2: score_pacing += 35
     elif metricas["promedio_toma"] < 3.0: score_pacing += 20
     elif metricas["promedio_toma"] > 4.0: score_pacing -= 20
     
-    # 2. Evaluación Visual
     score_visual = 50
     if metricas["ratio_video"] > 0.6: score_visual += 40
     elif metricas["ratio_video"] > 0.3: score_visual += 20
-    if metricas["uso_ia"] > 0: score_visual -= 5 # La IA es buen respaldo, pero el stock real es mejor
+    if metricas["uso_ia"] > 0: score_visual -= 5
 
-    # 3. Evaluación de Audio
     score_audio = 80
     if metricas["whooshes_colocados"] > 8: score_audio += 20
 
-    # 4. Evaluación de Texto
     score_texto = 50
     if metricas["textos_impacto"] > 4: score_texto += 30
     if metricas["textos_impacto"] > 10: score_texto += 20
@@ -128,7 +122,6 @@ def evaluar_y_mutar(config, metricas):
     config["score_texto"] = score_texto
     config["intentos"] = config.get("intentos", 0) + 1
     
-    # MUTACIÓN: Si el video fue lento (bajo Pacing), forzamos cortes más rápidos
     if score_pacing < 60:
         config["corte_min"] = max(1.0, config["corte_min"] - 0.2)
         config["corte_max"] = max(2.0, config["corte_max"] - 0.5)
@@ -146,7 +139,7 @@ def evaluar_y_mutar(config, metricas):
 CONFIG = cargar_configuracion_evolutiva()
 
 # ==========================================================
-# 2. UTILIDADES GENERALES Y MATEMÁTICAS
+# 2. UTILIDADES GENERALES
 # ==========================================================
 
 def preparar_carpetas_de_trabajo():
@@ -201,7 +194,7 @@ def dividir_texto_en_lineas(dibujo, texto, font, ancho_maximo):
     return lineas_resultantes
 
 # ==========================================================
-# 3. MOTOR DE CORTES VIRALES (REGLA DE LOS 5 SEGUNDOS)
+# 3. MOTOR DE CORTES VIRALES
 # ==========================================================
 
 def calcular_tiempos_de_corte(palabras, duracion_total):
@@ -224,7 +217,6 @@ def calcular_tiempos_de_corte(palabras, duracion_total):
     puntos_candidatos = sorted(set(round(c, 3) for c in puntos_candidatos))
     cortes_aprobados = [0.0]
     
-    # REGLA VIRAL: En los primeros 5 segundos, cortamos cada 1.2 segundos sin importar nada
     for c in puntos_candidatos:
         tiempo_actual = cortes_aprobados[-1]
         if c < 5.0:
@@ -256,7 +248,7 @@ def ajustar_recursos_a_tomas(recursos_disponibles, cantidad_tomas):
     return [recursos_disponibles[i % len(recursos_disponibles)] for i in range(cantidad_tomas)]
 
 # ==========================================================
-# 4. BÚSQUEDA MASIVA DE MATERIAL (STOCK + IA)
+# 4. BÚSQUEDA MASIVA DE MATERIAL
 # ==========================================================
 
 def generar_palabras_clave_busqueda(titulo, narracion):
@@ -359,7 +351,7 @@ def generar_imagen_artificial(prompt, num_escena, formato):
         return None
 
 # ==========================================================
-# 5. GENERACIÓN DE AUDIO (VOZ, WHOOSH, MÚSICA)
+# 5. GENERACIÓN DE AUDIO
 # ==========================================================
 
 async def generar_voz_ia(texto, ruta_salida):
@@ -412,7 +404,7 @@ def generar_musica_ambiente(duracion_total):
     return str(ruta_salida)
 
 # ==========================================================
-# 6. DISEÑO GRÁFICO EXTREMO (OVERLAYS Y ADVERTENCIAS)
+# 6. DISEÑO GRÁFICO EXTREMO
 # ==========================================================
 
 def crear_grafico_subtitulo(palabras_grupo, num_grupo, formato):
@@ -436,16 +428,13 @@ def crear_grafico_subtitulo(palabras_grupo, num_grupo, formato):
     return str(ruta_destino)
 
 def crear_grafico_scroll_stopper(formato):
-    """Crea la advertencia roja gigante que frena el scroll en el segundo 0."""
     ancho, alto = formato["ancho"], formato["alto"]
     imagen = Image.new("RGBA", (ancho, alto), (0,0,0,0))
     dibujo = ImageDraw.Draw(imagen)
     
     font_gigante = obtener_fuente_texto(int(ancho * 0.12), True)
     
-    # Recuadro de advertencia
     dibujo.rectangle((0, int(alto*0.35), ancho, int(alto*0.55)), fill=(220, 20, 20, 230))
-    # Texto de advertencia
     dibujo.text((ancho//2, int(alto*0.45)), "¡NO LO VAS\nA CREER!", font=font_gigante, fill="white", anchor="mm", align="center", stroke_width=6, stroke_fill="#000000")
     
     ruta_destino = RECURSOS / "scroll_stopper.png"
@@ -491,7 +480,7 @@ def crear_grafico_texto_gigante(palabra, formato):
     return str(ruta_destino)
 
 # ==========================================================
-# 7. MOTOR DE RENDERIZADO VISUAL (MATRIZ DE 10 MOVIMIENTOS)
+# 7. MOTOR DE RENDERIZADO VISUAL
 # ==========================================================
 
 def crear_toma_individual(ffmpeg, ruta_recurso, ruta_destino, duracion_toma, indice_toma, formato, es_impacto=False):
@@ -499,10 +488,8 @@ def crear_toma_individual(ffmpeg, ruta_recurso, ruta_destino, duracion_toma, ind
     es_video = ruta_recurso.endswith(".mp4")
     filtros = []
 
-    # Escalado inicial (1.2x)
     filtros.append(f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase,crop={int(ancho*1.2)}:{int(alto*1.2)}")
 
-    # Matriz de movimientos
     matriz_movimientos = [
         ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
         ("min(zoom+0.0020,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
@@ -523,9 +510,8 @@ def crear_toma_individual(ffmpeg, ruta_recurso, ruta_destino, duracion_toma, ind
     elif not es_video:
         filtros.append(f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}")
     else:
-        filtros.append(f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}")
+        filtros.append(f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={FPS}")
 
-    # Etalonaje y Pattern Interrupt
     filtros.append("eq=contrast=1.18:brightness=-0.02:saturation=1.30:gamma=0.95")
     filtros.append("unsharp=5:5:0.8:5:5:0.0")
 
@@ -586,27 +572,34 @@ def unir_todas_las_escenas_xfade(ffmpeg, lista_escenas, duraciones_escenas, ruta
     ejecutar_comando_ffmpeg(comando)
 
 # ==========================================================
-# 8. MEZCLA FINAL DE AUDIO (CON DUCKING) Y BARRA ROJA
+# 8. MEZCLA FINAL DE AUDIO Y VIDEO (CORREGIDO)
 # ==========================================================
 
 def mezcla_final_pro(ffmpeg, video_entrada, musica_entrada, lista_whooshes, ruta_destino, duracion_total):
     print("[RENDER] Aplicando mezcla de audio profesional, Ducking y barra de progreso roja...")
     
-    # Barra de progreso ROJA (psicológicamente llama a la urgencia)
     filtro_video = (
         f"[0:v]vignette=PI/6,"
         f"drawbox=x=0:y=h-10:w='iw*t/{duracion_total}':h=10:color=red@0.9:t=fill,format=yuv420p[vout]"
     )
     
-    # Audio Ducking (Música baja cuando habla la voz)
     filtro_audio = "[1:a]volume=0.15[musica];[0:a]volume=1.0[voz];"
     filtro_audio += "[musica][voz]sidechaincompress=threshold=0.03:ratio=8:attack=200:release=1000[musica_duck];"
     filtro_audio += "[voz][musica_duck]amix=inputs=2:duration=first[base];"
     
-    for i in range(len(lista_whooshes)):
-        filtro_audio += f"[{i+2}:a]volume=0.6[w{i}];[base][w{i}]amix=inputs=2:duration=first[base];"
+    # CORRECCIÓN CRÍTICA: Mezclar los whooshes sin reutilizar la etiqueta [base] en el bucle
+    if lista_whooshes:
+        whoosh_labels = ""
+        for i in range(len(lista_whooshes)):
+            filtro_audio += f"[{i+2}:a]volume=0.6[w{i}];"
+            whoosh_labels += f"[w{i}]"
         
-    filtro_audio += "[base]alimiter=limit=0.95[audio]"
+        total_inputs = len(lista_whooshes) + 1
+        filtro_audio += f"[base]{whoosh_labels}amix=inputs={total_inputs}:duration=first[audio_mixed];"
+    else:
+        filtro_audio += "[base]anull[audio_mixed];"
+        
+    filtro_audio += "[audio_mixed]alimiter=limit=0.95[audio]"
     
     filtro_total = filtro_video + ";" + filtro_audio
 
@@ -641,12 +634,10 @@ async def crear_video():
     archivos_escenas_finales = []
     duraciones_escenas_finales = []
     archivo_whoosh = generar_efecto_whoosh(RECURSOS / "whoosh.wav")
-    
-    # Generar el Scroll Stopper
     scroll_stopper = crear_grafico_scroll_stopper(formato)
 
     print("============================================================")
-    print("FORTALEZA MEDIA AI 14.1 — INICIANDO PRODUCCIÓN TITÁN")
+    print("FORTALEZA MEDIA AI 14.2 — INICIANDO PRODUCCIÓN TITÁN")
     print("============================================================")
 
     for num_escena, datos_escena in enumerate(escenas):
@@ -654,16 +645,13 @@ async def crear_video():
         narracion = str(datos_escena["narracion"]).strip()
         titulo_escena = str(datos_escena.get("titulo", titulo))
         
-        # Voz
         ruta_voz = RECURSOS / f"voz_{num_escena:02d}.mp3"
         marcas_palabras = await generar_voz_ia(narracion, str(ruta_voz))
         duracion_voz = obtener_duracion_media(ffmpeg, ruta_voz)
         
-        # Cortes
         cortes = calcular_tiempos_de_corte(marcas_palabras, duracion_voz)
         cantidad_tomas = max(1, len(cortes) - 1)
         
-        # Material
         videos_descargados = buscar_videos_stock(titulo, narracion, num_escena, formato)
         lista_recursos = [v["archivo"] for v in videos_descargados]
         metricas["tomadas_video"] += len(lista_recursos)
@@ -684,14 +672,13 @@ async def crear_video():
 
         recursos_asignados = ajustar_recursos_a_tomas(lista_recursos, cantidad_tomas)
         
-        # Renderizado de Tomas
         lista_tomas_mp4 = []
         for i in range(cantidad_tomas):
             dur_toma = cortes[i + 1] - cortes[i]
             if dur_toma <= 0.4: continue
             
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
-            es_impacto = (i == 0) # Glitch en el primer frame de cada escena
+            es_impacto = (i == 0)
             
             crear_toma_individual(ffmpeg, recursos_asignados[i], ruta_toma, dur_toma, num_escena*10+i, formato, es_impacto)
             lista_tomas_mp4.append(str(ruta_toma))
@@ -703,7 +690,6 @@ async def crear_video():
         ruta_visual = RECURSOS / f"visual_escena_{num_escena:02d}.mp4"
         concatenar_tomas_escena(ffmpeg, lista_tomas_mp4, ruta_visual, RECURSOS / f"lista_tomas_{num_escena:02d}.txt")
 
-        # Subtítulos
         subtitulos_img = []
         grupos_palabras, grupo_actual = [], []
         for p in marcas_palabras:
@@ -730,13 +716,11 @@ async def crear_video():
                 textos_gigantes.append({"archivo": ruta_txt, "inicio": p["inicio"], "fin": min(duracion_voz, p["fin"] + 0.4)})
                 metricas["textos_impacto"] += 1
 
-        # Composición de la Escena
         cmd_componer = [ffmpeg, "-y", "-i", str(ruta_visual), "-i", str(ruta_voz)]
         
         for sub in subtitulos_img: cmd_componer.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
         cmd_componer.extend(["-loop", "1", "-framerate", str(FPS), "-i", ruta_lt])
         
-        # Agregar Scroll Stopper solo a la primera escena
         if num_escena == 0:
              cmd_componer.extend(["-loop", "1", "-framerate", str(FPS), "-i", scroll_stopper])
 
