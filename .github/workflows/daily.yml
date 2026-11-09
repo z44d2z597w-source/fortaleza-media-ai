@@ -18,7 +18,7 @@ permissions:
 jobs:
   producir:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Descargar proyecto
@@ -34,10 +34,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generar video (Motor Titán 14.2)
+      - name: Generar video (Motor IA Total)
         env:
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          MAGIC_HOUR_API_KEY: ${{ secrets.MAGIC_HOUR_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python main.py
 
@@ -64,22 +62,6 @@ jobs:
           git commit -m "Auto-mejora: Actualizar cerebro evolutivo e historial [skip ci]"
           git push
 
-      - name: Detectar formato de salida
-        run: |
-          python - <<'PY'
-          import json, os
-          formato = "vertical"
-          if os.path.exists("guion.json"):
-              with open("guion.json", encoding="utf-8") as f:
-                  g = json.load(f)
-              texto = str(g.get("formato", "")).lower().strip()
-              if texto in {"horizontal", "video largo", "16:9", "largo"}:
-                  formato = "horizontal"
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"FORMATO={formato}\n")
-          print("Formato detectado:", formato)
-          PY
-
       - name: Preparar título y descripción
         run: |
           python - <<'PY'
@@ -89,18 +71,13 @@ jobs:
           with open("guion.json", encoding="utf-8") as f:
               guion = json.load(f)
 
-          formato = os.environ.get("FORMATO", "vertical")
-
           titulo = " ".join(guion["titulo"].split())[:100]
 
           narracion = " ".join(
               escena["narracion"] for escena in guion["escenas"]
           )
 
-          if formato == "horizontal":
-              hashtags = " #Documental #Historia #Ciencia #Misterios"
-          else:
-              hashtags = " #Shorts #Curiosidades #Misterios #DatosCuriosos"
+          hashtags = " #Shorts #Curiosidades #Misterios #DatosCuriosos"
 
           descripcion = (
               " ".join(narracion.split())
@@ -114,7 +91,7 @@ jobs:
               f.write(f"VIDEO_DESCRIPTION<<{delimiter}\n{descripcion}\n{delimiter}\n")
           PY
 
-      - name: Guardar copia del video y reportes
+      - name: Guardar copia del video
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
@@ -122,7 +99,6 @@ jobs:
             output/fortaleza_final.mp4
             output/fortaleza_short.mp4
             output/reporte_edicion.json
-            output/estado_produccion.json
           retention-days: 7
           if-no-files-found: warn
 
@@ -134,13 +110,10 @@ jobs:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
           VIDEO_DESCRIPTION: ${{ env.VIDEO_DESCRIPTION }}
-          FORMATO: ${{ env.FORMATO }}
         run: |
           set -e
 
-          if [ "$FORMATO" = "horizontal" ] && [ -s output/fortaleza_largo.mp4 ]; then
-            VIDEO="output/fortaleza_largo.mp4"
-          elif [ -s output/fortaleza_short.mp4 ]; then
+          if [ -s output/fortaleza_short.mp4 ]; then
             VIDEO="output/fortaleza_short.mp4"
           elif [ -s output/fortaleza_final.mp4 ]; then
             VIDEO="output/fortaleza_final.mp4"
