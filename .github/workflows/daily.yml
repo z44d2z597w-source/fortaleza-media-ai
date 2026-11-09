@@ -1,0 +1,23 @@
+name: FORTALEZA MEDIA AI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  iniciar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Iniciar FORTALEZA MEDIA AI
+        run: python main.py
