@@ -34,9 +34,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generar video (Motor Titán 13.0)
+      - name: Generar video (Motor Titán 14.2)
         env:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          MAGIC_HOUR_API_KEY: ${{ secrets.MAGIC_HOUR_API_KEY }}
         run: python main.py
 
       - name: Guardar Memoria Evolutiva e Historial
@@ -136,7 +137,9 @@ jobs:
         run: |
           set -e
 
-          if [ -s output/fortaleza_short.mp4 ]; then
+          if [ "$FORMATO" = "horizontal" ] && [ -s output/fortaleza_largo.mp4 ]; then
+            VIDEO="output/fortaleza_largo.mp4"
+          elif [ -s output/fortaleza_short.mp4 ]; then
             VIDEO="output/fortaleza_short.mp4"
           elif [ -s output/fortaleza_final.mp4 ]; then
             VIDEO="output/fortaleza_final.mp4"
@@ -162,7 +165,7 @@ jobs:
           curl --silent --show-error --fail-with-body \
             --max-time 1800 \
             -X POST \
-            "https://fortaleza-youtube-auth.z44d2z597w.dev/publicar" \
+            "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
             -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
             -H "Content-Type: video/mp4" \
             -H "X-Video-Title: ${VIDEO_TITLE}" \
