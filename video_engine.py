@@ -10,7 +10,6 @@ ARCHIVO_SERIE = Path("guion_serie.json")
 ARCHIVO_ESTADO = Path("estado_serie.json")
 ARCHIVO_HISTORIAL = Path("historial_creativo.json")
 
-# Combinador aleatorio para respaldo
 PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada"]
 ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor"]
 OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "una llave que no abre nada"]
@@ -39,12 +38,27 @@ def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key: return None
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
-    for modelo in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
-        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un guionista experto en mini-series."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
-        try:
-            resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
-            if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
-        except: pass
+    # Usamos el modelo actual recomendado por Groq
+    payload = {"model": "openai/gpt-oss-120b", "messages": [{"role": "system", "content": "Eres un guionista experto en mini-series."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
+    try:
+        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
+    except: pass
+    return None
+
+def generar_con_pollinations(prompt):
+    # Endpoint actualizado compatible con OpenAI
+    try:
+        url = "https://gen.pollinations.ai/v1/chat/completions"
+        payload = {
+            "model": "openai",
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"}
+        }
+        resp = requests.post(url, json=payload, timeout=90)
+        if resp.status_code == 200:
+            return json.loads(resp.json()["choices"][0]["message"]["content"])
+    except: pass
     return None
 
 def crear_nueva_serie():
@@ -54,7 +68,7 @@ def crear_nueva_serie():
     prompt = f"""
     Crea una MINI-SERIE de misterio de 5 episodios.
     NO USES estos temas anteriores: {temas_prohibidos}.
-    Cada episodio debe durar 1 minuto en formato de narración (aprox 150 palabras). Cada episodio debe terminar en un CLIFFHANGER (suspenso).
+    Cada episodio debe durar 1 minuto (aprox 150 palabras). Cada episodio debe terminar en un CLIFFHANGER.
     
     DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
     {{
@@ -69,7 +83,7 @@ def crear_nueva_serie():
     }}
     """
     
-    plan = generar_con_groq(prompt)
+    plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
     
     if not plan or "episodios" not in plan:
         print("[AVISO] IA falló. Creando serie de respaldo única.")
@@ -92,8 +106,6 @@ def crear_nueva_serie():
 
 def obtener_guion_hoy():
     estado = cargar_estado()
-    
-    # Si no hay serie o terminó, crear nueva
     if estado["serie_actual"] is None or estado["parte_actual"] > estado["total_partes"]:
         print("[SISTEMA] Iniciando nueva mini-serie de 5 partes...")
         nueva_serie = crear_nueva_serie()
@@ -107,7 +119,6 @@ def obtener_guion_hoy():
     print(f"[SISTEMA] Generando Parte {parte} de 5: {serie['titulo_serie']}")
     
     episodio_hoy = serie["episodios"][parte - 1]
-    
     guion_hoy = {
         "titulo_serie": serie["titulo_serie"],
         "parte": parte,
@@ -118,12 +129,6 @@ def obtener_guion_hoy():
     }
     
     with open("guion.json", "w") as f: json.dump(guion_hoy, f, ensure_ascii=False, indent=4)
-    
-    # Preparar siguiente parte
     estado["parte_actual"] += 1
     guardar_estado(estado)
-    
     return guion_hoy
-
-if __name__ == "__main__":
-    obtener_guion_hoy()
