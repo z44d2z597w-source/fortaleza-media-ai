@@ -1,10 +1,18 @@
-
 name: FORTALEZA MEDIA AI
 
 on:
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar en YouTube al terminar (true/false)'
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: '0 15 * * *'
+
+permissions:
+  contents: write
 
 jobs:
   producir:
@@ -21,10 +29,46 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Generar video
         run: python main.py
+
+      - name: Persistir historial de temas
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ ! -f historial_temas.json ]; then
+            echo "No existe historial_temas.json; nada que persistir."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add historial_temas.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en el historial."
+            exit 0
+          fi
+          git commit -m "Actualizar historial_temas.json [skip ci]"
+          git push
+
+      - name: Detectar formato de salida
+        run: |
+          python - <<'PY'
+          import json, os
+          formato = "vertical"
+          if os.path.exists("guion.json"):
+              with open("guion.json", encoding="utf-8") as f:
+                  g = json.load(f)
+              texto = str(g.get("formato", "")).lower().strip()
+              if texto in {"horizontal", "video largo", "16:9", "largo"}:
+                  formato = "horizontal"
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"FORMATO={formato}\n")
+          print("Formato detectado:", formato)
+          PY
 
       - name: Preparar título y descripción
         run: |
@@ -35,15 +79,22 @@ jobs:
           with open("guion.json", encoding="utf-8") as f:
               guion = json.load(f)
 
+          formato = os.environ.get("FORMATO", "vertical")
+
           titulo = " ".join(guion["titulo"].split())[:100]
 
           narracion = " ".join(
               escena["narracion"] for escena in guion["escenas"]
           )
 
+          if formato == "horizontal":
+              hashtags = " #Documental #Historia #Ciencia #Misterios"
+          else:
+              hashtags = " #Shorts #Curiosidades #Misterios #DatosCuriosos"
+
           descripcion = (
               " ".join(narracion.split())
-              + " #Shorts #Curiosidades #Misterios"
+              + hashtags
           )[:5000]
 
           delimiter = "FORTALEZA_" + str(os.getpid())
@@ -57,23 +108,39 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
-          path: output/fortaleza_short.mp4
+          path: |
+            output/fortaleza_final.mp4
+            output/fortaleza_short.mp4
+            output/fortaleza_largo.mp4
+            output/estado_produccion.json
+            output/creditos_imagenes.txt
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Publicar automáticamente en YouTube
+        if: |
+          github.event_name == 'schedule' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publicar == 'true')
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
           VIDEO_DESCRIPTION: ${{ env.VIDEO_DESCRIPTION }}
+          FORMATO: ${{ env.FORMATO }}
         run: |
           set -e
 
-          VIDEO="output/fortaleza_short.mp4"
-
-          if [ ! -s "$VIDEO" ]; then
-            echo "ERROR: No se encontró el video."
+          if [ "$FORMATO" = "horizontal" ] && [ -s output/fortaleza_largo.mp4 ]; then
+            VIDEO="output/fortaleza_largo.mp4"
+          elif [ -s output/fortaleza_short.mp4 ]; then
+            VIDEO="output/fortaleza_short.mp4"
+          elif [ -s output/fortaleza_final.mp4 ]; then
+            VIDEO="output/fortaleza_final.mp4"
+          else
+            echo "ERROR: No se encontró ningún video final."
             exit 1
           fi
+
+          echo "Video a publicar: $VIDEO"
 
           if [ -z "$FORTALEZA_UPLOAD_KEY" ]; then
             echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
