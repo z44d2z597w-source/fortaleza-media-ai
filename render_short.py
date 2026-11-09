@@ -41,17 +41,21 @@ def obtener_video_fondo():
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if pixabay_key:
         try:
-            # CATEGORÍAS ALEATORIAS para no repetir fondo nunca
             query = random.choice(["subway surfers", "minecraft parkour", "oddly satisfying", "satisfying video", "gameplay", "cooking video"])
-            resp = requests.get("https://pixabay.com/api/videos/", params={"key": pixabay_key, "q": query, "orientation": "vertical", "per_page": 5}, timeout=15).json()
+            # NOTA: Pixabay no soporta "orientation" para videos. Buscamos sin ese filtro.
+            resp = requests.get("https://pixabay.com/api/videos/", params={"key": pixabay_key, "q": query, "per_page": 10}, timeout=15).json()
             for hit in resp.get("hits", []):
-                url = hit.get("videos", {}).get("large", {}).get("url") or hit.get("videos", {}).get("medium", {}).get("url")
-                if url:
-                    ruta = RECURSOS / "fondo_gameplay.mp4"
-                    with requests.get(url, stream=True, timeout=20) as r:
-                        with open(ruta, "wb") as f:
-                            for chunk in r.iter_content(8192): f.write(chunk)
-                    if os.path.getsize(ruta) > 50000: return str(ruta)
+                # Filtramos manualmente para asegurar que sea vertical
+                ancho = hit.get("videos", {}).get("large", {}).get("width", 0)
+                alto = hit.get("videos", {}).get("large", {}).get("height", 0)
+                if alto > ancho: # Es vertical
+                    url = hit.get("videos", {}).get("large", {}).get("url") or hit.get("videos", {}).get("medium", {}).get("url")
+                    if url:
+                        ruta = RECURSOS / "fondo_gameplay.mp4"
+                        with requests.get(url, stream=True, timeout=20) as r:
+                            with open(ruta, "wb") as f:
+                                for chunk in r.iter_content(8192): f.write(chunk)
+                        if os.path.getsize(ruta) > 50000: return str(ruta)
         except Exception: pass
     return None
 
@@ -122,7 +126,8 @@ async def renderizar_short():
     filtros.append(f"[0:v]scale={FORMATO['ancho']}:{FORMATO['alto']}:force_original_aspect_ratio=increase,crop={FORMATO['ancho']}:{FORMATO['alto']},eq=brightness=-0.15:saturation=1.3[bg]")
     actual = "[bg]"
     if img_ia:
-        filtros.append(f"[2:v]scale=1080:1920[img]")
+        # Zoom suave: supersampling a 4x para evitar jitter
+        filtros.append(f"[2:v]scale=4320:7680,zoompan=z='min(zoom+0.0005,1.1)':d=1:s=1080x1920:fps={FPS}[img]")
         filtros.append(f"{actual}[img]overlay=0:0:enable='between(t,0,{dur_voz})'[v_img]")
         actual = "[v_img]"
     
