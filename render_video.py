@@ -19,7 +19,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================================
-# FORTALEZA MEDIA AI 22.0 — CONECTADO A AGNES Y MAGIC HOUR
+# FORTALEZA MEDIA AI 22.1 — AUDIO BLINDADO Y VIDEO IA
 # ==========================================================
 
 FPS = 30
@@ -28,7 +28,6 @@ RECURSOS = OUTPUT / "recursos"
 MAX_ESCENAS = 20
 
 CONFIG_DEFECTO = {"corte_min": 1.5, "corte_max": 3.5}
-PALABRAS_IMPACTO = ["increíble", "sorprendente", "misterio", "secreto", "peligro", "jamás", "nunca", "impactante", "aterrador", "asombroso", "oculto", "verdad", "ciencia", "descubrimiento", "tendencia", "viral", "drama", "historia", "enigma", "prohibido"]
 
 def preparar_carpetas():
     OUTPUT.mkdir(exist_ok=True)
@@ -148,16 +147,35 @@ def generar_imagen_pollinations(prompt, num_escena, num_toma, formato):
         print(f"[POLLINATIONS] Error: {e}")
         return None
 
-async def generar_voz(texto, ruta, voz_elegida):
-    tts = edge_tts.Communicate(texto, voice=voz_elegida, rate="+8%")
-    audio, marcas = bytearray(), []
-    async for f in tts.stream():
-        if f["type"] == "audio": audio.extend(f["data"])
-        elif f["type"] == "WordBoundary":
-            inicio = f["offset"] / 10000000
-            marcas.append({"texto": f["text"], "inicio": inicio, "fin": inicio + (f["duration"] / 10000000)})
-    with open(ruta, "wb") as f: f.write(audio)
-    return marcas
+# --- AUDIO BLINDADO ---
+async def generar_voz_con_respaldo(texto, ruta, voz_elegida):
+    # Intentará con la voz elegida, si falla usará Dalia, y si no, Jorge.
+    voces_a_probar = [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]
+    
+    for voz in voces_a_probar:
+        try:
+            print(f"[VOZ] Intentando generar audio con: {voz}")
+            tts = edge_tts.Communicate(texto, voice=voz, rate="+8%")
+            audio, marcas = bytearray(), []
+            async for f in tts.stream():
+                if f["type"] == "audio": audio.extend(f["data"])
+                elif f["type"] == "WordBoundary":
+                    inicio = f["offset"] / 10000000
+                    marcas.append({"texto": f["text"], "inicio": inicio, "fin": inicio + (f["duration"] / 10000000)})
+            
+            # Si se generó audio mayor a 1 segundo, es exitoso
+            if len(audio) > 1000:
+                with open(ruta, "wb") as f: f.write(audio)
+                print(f"[VOZ] ¡Éxito con {voz}!")
+                return marcas
+            else:
+                print(f"[VOZ] {voz} no devolvió audio válido. Probando siguiente...")
+        except Exception as e:
+            print(f"[VOZ] Error con {voz}: {e}. Probando siguiente...")
+            
+    raise RuntimeError("Ninguna voz de Edge TTS funcionó. Revisar conexión.")
+
+# --- GRÁFICOS Y MEZCLA ---
 
 def generar_whoosh(ruta):
     frec, dur = 44100, 0.4
@@ -201,11 +219,9 @@ def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_
     ancho, alto = formato["ancho"], formato["alto"]
     
     if es_video:
-        # Si es un video real de Agnes/Magic Hour, solo lo recortamos y ajustamos
         filtros = [f"scale={ancho}:{alto}:force_original_aspect_ratio=increase", f"crop={ancho}:{alto}", "setsar=1", "format=yuv420p"]
         cmd = [ffmpeg, "-y", "-stream_loop", "-1", "-i", ruta_recurso, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
     else:
-        # Si es imagen de Pollinations, le aplicamos zoom y movimientos
         movimientos = [
             ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
             ("min(zoom+0.0025,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
@@ -260,7 +276,7 @@ async def crear_video():
     scroll = crear_scroll_stopper(formato)
 
     print("============================================================")
-    print(f"FORTALEZA MEDIA AI 22.0 — PRODUCIENDO: {titulo}")
+    print(f"FORTALEZA MEDIA AI 22.1 — PRODUCIENDO: {titulo}")
     print(f"VOZ: {voz_elegida} | ESTILO: {estilo_visual}")
     print("============================================================")
 
@@ -269,7 +285,8 @@ async def crear_video():
         narracion = str(datos["narracion"]).strip()
         ruta_voz = RECURSOS / f"voz_{num_escena:02d}.mp3"
         
-        marcas = await generar_voz(narracion, str(ruta_voz), voz_elegida)
+        # LLAMAMOS A LA FUNCIÓN BLINDADA
+        marcas = await generar_voz_con_respaldo(narracion, str(ruta_voz), voz_elegida)
         dur_voz = obtener_duracion(ffmpeg, ruta_voz)
         
         cortes = calcular_cortes(marcas, dur_voz)
@@ -283,16 +300,13 @@ async def crear_video():
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
             prompt = f"{estilo_visual}, vertical 9:16, {narracion[:120]}"
             
-            # 1. Intentar con Agnes
             video_ia = generar_video_agnes(prompt, dur)
             es_video = True
             
-            # 2. Si falla, intentar con Magic Hour
             if not video_ia:
                 print("[RESPALDO] Agnes falló. Intentando Magic Hour...")
                 video_ia = generar_video_magichour(prompt, dur)
             
-            # 3. Si ambos fallan, generar imagen con Pollinations
             if not video_ia:
                 print("[RESPALDO] Magic Hour falló. Generando imagen...")
                 video_ia = generar_imagen_pollinations(prompt, num_escena, i, formato)
