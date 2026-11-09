@@ -7,6 +7,7 @@ import random
 import re
 import shutil
 import subprocess
+import time
 import urllib.parse
 import wave
 from array import array
@@ -22,7 +23,7 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 18.0 — TITÁN DEFINITIVO
+# FORTALEZA MEDIA AI 19.0 — AGNES VIDEO IA TOTAL
 # ==========================================================
 
 FPS = 30
@@ -50,7 +51,13 @@ PALABRAS_IMPACTO = [
     "viral", "drama", "historia", "enigma", "prohibido"
 ]
 
-CABECERAS = {"User-Agent": "FortalezaMediaAI/18.0 python-requests"}
+CABECERAS = {"User-Agent": "FortalezaMediaAI/19.0 python-requests"}
+
+# --- CONFIGURACIÓN DE AGNES VIDEO ---
+AGNES_API_KEY = "sk-wtQ84SRJzizAfKWm9m6hbzqYvg5S7rR2ZDlLKcHouC29ncpA"
+AGNES_BASE_URL = "https://apihub.agnes-ai.cn/v1"
+AGNES_MODEL = "agnes-video-v2.0"
+
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -71,11 +78,9 @@ def evaluar_y_mutar(config, metricas):
     score_pacing = 50
     if metricas["promedio_toma"] < 2.2: score_pacing += 35
     elif metricas["promedio_toma"] < 3.0: score_pacing += 20
-    
     score_global = int((score_pacing + 80 + 80 + 50) / 4)
     config["score_global"] = score_global
     config["intentos"] = config.get("intentos", 0) + 1
-    
     with open(ARCHIVO_CONFIG, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
     print(f"[EVOLUCIÓN] Score Final: {score_global}/100")
@@ -130,14 +135,12 @@ def dividir_texto_en_lineas(dibujo, texto, font, ancho_maximo):
 def calcular_tiempos_de_corte(palabras, duracion_total):
     c_min, c_max = CONFIG.get("corte_min", 1.5), CONFIG.get("corte_max", 3.5)
     if duracion_total <= 0: return [0.0, duracion_total]
-    
     puntos = []
     for i in range(1, len(palabras)):
         if palabras[i]["inicio"] - palabras[i - 1]["fin"] >= 0.25:
             puntos.append((palabras[i - 1]["fin"] + palabras[i]["inicio"]) / 2)
     for p in palabras:
         if p["texto"].strip().endswith((".", "?", "!")): puntos.append(p["fin"] + 0.05)
-
     puntos = sorted(set(round(c, 3) for c in puntos))
     cortes = [0.0]
     for c in puntos:
@@ -145,7 +148,6 @@ def calcular_tiempos_de_corte(palabras, duracion_total):
             if c - cortes[-1] >= 1.2: cortes.append(c)
         else:
             if c - cortes[-1] >= c_min and duracion_total - c >= c_min: cortes.append(c)
-
     resultado = [0.0]
     for c in cortes[1:]:
         while c - resultado[-1] > c_max: resultado.append(resultado[-1] + c_max)
@@ -159,47 +161,68 @@ def ajustar_recursos(recursos, cantidad):
     if cantidad <= len(recursos): return recursos[:cantidad]
     return [recursos[i % len(recursos)] for i in range(cantidad)]
 
-# --- BÚSQUEDA DE MATERIAL ---
+# --- GENERACIÓN DE VIDEO CON AGNES ---
 
-def generar_palabras_clave(titulo, narracion):
-    palabras = re.findall(r"[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}", titulo + " " + narracion)
-    filtradas = [p for p in palabras if p.lower() not in ["para", "porque", "sobre", "desde", "hasta", "donde", "cuando"]]
-    return " ".join(list(dict.fromkeys(filtradas))[:3]) if filtradas else "cinematic"
-
-def buscar_videos_stock(titulo, narracion, num_escena, formato):
-    clave = os.environ.get("PIXABAY_API_KEY")
-    if not clave: return []
-    consulta = generar_palabras_clave(titulo, narracion)
-    url = "https://pixabay.com/api/videos/"
-    params = {"key": clave, "q": consulta, "orientation": formato["orientacion"], "per_page": 10}
+def generar_video_agnes(prompt, duracion_sugerida=5):
+    """Genera un video corto con Agnes Video 2.0."""
+    print(f"[AGNES] Generando video: '{prompt[:60]}...'")
+    
+    headers = {
+        "Authorization": f"Bearer {AGNES_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": AGNES_MODEL,
+        "prompt": prompt,
+        "duration": duracion_sugerida,
+        "aspect_ratio": "9:16"
+    }
+    
     try:
-        hits = requests.get(url, params=params, timeout=20).json().get("hits", [])
-    except Exception: return []
-
-    descargas = []
-    for hit in hits:
-        mejor = hit.get("videos", {}).get("large") or hit.get("videos", {}).get("medium")
-        if not mejor: continue
-        ruta = RECURSOS / f"vid_{num_escena:02d}_{len(descargas):02d}.mp4"
-        try:
-            with requests.get(mejor["url"], stream=True, timeout=30) as r:
-                r.raise_for_status()
-                with open(ruta, "wb") as f:
-                    for chunk in r.iter_content(8192): f.write(chunk)
-            if os.path.getsize(ruta) > 15000:
-                descargas.append({"archivo": str(ruta), "es_video": True})
-                if len(descargas) >= 3: break
-        except Exception: pass
-    return descargas
+        # 1. Enviar tarea
+        resp = requests.post(f"{AGNES_BASE_URL}/video/generations", headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        task_id = data.get("id") or data.get("task_id")
+        if not task_id:
+            print("[AGNES] No se recibió ID de tarea.")
+            return None
+        
+        # 2. Polling
+        for intento in range(60):
+            time.sleep(10)
+            poll_resp = requests.get(f"{AGNES_BASE_URL}/video/generations/{task_id}", headers=headers, timeout=30)
+            poll_data = poll_resp.json()
+            estado = poll_data.get("status")
+            if estado == "succeeded":
+                video_url = poll_data.get("output", {}).get("video_url")
+                if video_url:
+                    ruta = RECURSOS / f"agnes_{task_id}.mp4"
+                    with requests.get(video_url, stream=True, timeout=120) as r:
+                        r.raise_for_status()
+                        with open(ruta, "wb") as f:
+                            for chunk in r.iter_content(8192): f.write(chunk)
+                    print(f"[AGNES] Video descargado: {ruta}")
+                    return str(ruta)
+            elif estado == "failed":
+                print(f"[AGNES] Tarea fallida: {poll_data}")
+                return None
+        print("[AGNES] Tiempo de espera agotado.")
+        return None
+    except Exception as e:
+        print(f"[AGNES] Error: {e}")
+        return None
 
 def generar_imagen_ia(prompt, num_escena, num_toma, formato):
+    """Respaldo: imagen generada con Pollinations."""
     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
     try:
         respuesta = requests.get(url, timeout=60)
         ruta = RECURSOS / f"ia_{num_escena:02d}_{num_toma:02d}.jpg"
         with open(ruta, "wb") as f: f.write(respuesta.content)
         Image.open(ruta).verify()
-        return {"archivo": str(ruta), "es_video": False}
+        return str(ruta)
     except Exception: return None
 
 # --- AUDIO Y GRÁFICOS ---
@@ -255,32 +278,46 @@ def crear_scroll_stopper(formato):
 
 # --- RENDERIZADO ---
 
-def crear_toma(ffmpeg, recurso, destino, duracion, indice, formato, es_impacto):
+def crear_toma_video(ffmpeg, ruta_video, destino, duracion, formato):
+    """Toma un clip de video generado por Agnes y lo ajusta a la duración y formato."""
     ancho, alto = formato["ancho"], formato["alto"]
-    filtros = [f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase,crop={int(ancho*1.2)}:{int(alto*1.2)}"]
-    
-    movimientos = [
-        ("min(zoom+0.0015,1.3)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"),
-        ("min(zoom+0.0020,1.4)", "iw/2-(iw/zoom/2)+on*0.15", "ih/2-(ih/zoom/2)"),
-        ("max(zoom-0.0010,1.0)", "iw/2-(iw/zoom/2)-on*0.10", "ih/2-(ih/zoom/2)"),
+    # Recortar y escalar al formato vertical
+    filtros = [
+        f"scale={ancho}:{alto}:force_original_aspect_ratio=increase",
+        f"crop={ancho}:{alto}",
+        "setsar=1",
+        "format=yuv420p"
     ]
-    zoom, x, y = movimientos[indice % len(movimientos)]
+    cmd = [
+        ffmpeg, "-y", "-i", ruta_video,
+        "-vf", ",".join(filtros),
+        "-t", f"{duracion:.3f}",
+        "-an",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
+        "-pix_fmt", "yuv420p", "-r", str(FPS),
+        str(destino)
+    ]
+    ejecutar_comando_ffmpeg(cmd)
 
-    if es_impacto and not recurso["es_video"]:
-        filtros.append(f"zoompan=z='if(lt(on,15),1.6-on/25,1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={FPS}")
-    elif not recurso["es_video"]:
-        filtros.append(f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}")
-    else:
-        filtros.append(f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}")
-
-    filtros.append("eq=contrast=1.18:saturation=1.30:gamma=0.95,unsharp=5:5:0.8:5:5:0.0")
-    if es_impacto: filtros.append("rgbashift=rh=10:bh=-10:enable='lt(t,0.25)'")
-    filtros.append("setsar=1,format=yuv420p")
-
-    cmd = [ffmpeg, "-y"]
-    if recurso["es_video"]: cmd.extend(["-stream_loop", "-1", "-i", recurso["archivo"]])
-    else: cmd.extend(["-loop", "1", "-framerate", str(FPS), "-i", recurso["archivo"]])
-    cmd.extend(["-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-r", str(FPS), str(destino)])
+def crear_toma_imagen(ffmpeg, ruta_imagen, destino, duracion, formato):
+    """Respaldo: anima una imagen generada por Pollinations."""
+    ancho, alto = formato["ancho"], formato["alto"]
+    filtros = [
+        f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase",
+        f"crop={int(ancho*1.2)}:{int(alto*1.2)}",
+        "zoompan=z='min(zoom+0.0015,1.3)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={FPS}",
+        "eq=contrast=1.18:saturation=1.30:gamma=0.95",
+        "setsar=1",
+        "format=yuv420p"
+    ]
+    cmd = [
+        ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", ruta_imagen,
+        "-vf", ",".join(filtros),
+        "-t", f"{duracion:.3f}", "-an",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
+        "-pix_fmt", "yuv420p", "-r", str(FPS),
+        str(destino)
+    ]
     ejecutar_comando_ffmpeg(cmd)
 
 def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
@@ -312,10 +349,14 @@ async def crear_video():
     formato = {"nombre": "vertical", "ancho": 1080, "alto": 1920, "orientacion": "vertical"}
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
 
-    metricas = {"total_tomas": 0, "duracion_total_tomas": 0, "tomadas_video": 0}
+    metricas = {"total_tomas": 0, "duracion_total_tomas": 0}
     escenas_finales, duraciones_finales = [], []
     whoosh = generar_whoosh(RECURSOS / "whoosh.wav")
     scroll = crear_scroll_stopper(formato)
+
+    print("============================================================")
+    print("FORTALEZA MEDIA AI 19.0 — GENERACIÓN CON AGNES VIDEO")
+    print("============================================================")
 
     for num_escena, datos in enumerate(escenas):
         print(f"\n[ESCENA {num_escena + 1}/{len(escenas)}]")
@@ -330,44 +371,44 @@ async def crear_video():
         cortes = calcular_tiempos_de_corte(marcas, dur_voz)
         num_tomas = max(1, len(cortes) - 1)
 
-        # 3. Material (Videos Stock o Imágenes IA)
-        videos = buscar_videos_stock(titulo, narracion, num_escena, formato)
-        recursos = videos
-        metricas["tomadas_video"] += len(videos)
-        
-        for i in range(len(videos), num_tomas):
-            prompt = f"Cinematic vertical 9:16, dramatic lighting, {narracion[:100]}"
-            img = generar_imagen_ia(prompt, num_escena, i, formato)
-            if img: recursos.append(img)
-
-        if not recursos:
-            ruta = RECURSOS / f"fondo_{num_escena}.jpg"
-            Image.new("RGB", (formato["ancho"], formato["alto"]), "#101010").save(ruta)
-            recursos = [{"archivo": str(ruta), "es_video": False}]
-
-        recursos_asig = ajustar_recursos(recursos, num_tomas)
-
-        # 4. Renderizar Tomas
+        # 3. Generar material visual para cada toma
         tomas_mp4 = []
         for i in range(num_tomas):
             dur = cortes[i + 1] - cortes[i]
             if dur <= 0.4: continue
+            
             ruta_toma = RECURSOS / f"toma_{num_escena:02d}_{i:02d}.mp4"
-            crear_toma(ffmpeg, recursos_asig[i], ruta_toma, dur, num_escena*10+i, formato, (i == 0))
+            
+            # Intentar generar video con Agnes
+            prompt_video = f"Cinematic vertical 9:16, dramatic lighting, {narracion[:120]}"
+            video_agnes = generar_video_agnes(prompt_video, duracion_sugerida=min(5, int(dur) + 1))
+            
+            if video_agnes:
+                crear_toma_video(ffmpeg, video_agnes, ruta_toma, dur, formato)
+            else:
+                # Respaldo: imagen de Pollinations animada
+                print("[RESPALDO] Agnes falló. Generando imagen con Pollinations...")
+                img = generar_imagen_ia(prompt_video, num_escena, i, formato)
+                if img:
+                    crear_toma_imagen(ffmpeg, img, ruta_toma, dur, formato)
+                else:
+                    # Último recurso: fondo negro
+                    ruta_fondo = RECURSOS / f"fondo_{num_escena}_{i}.jpg"
+                    Image.new("RGB", (formato["ancho"], formato["alto"]), "#101010").save(ruta_fondo)
+                    crear_toma_imagen(ffmpeg, str(ruta_fondo), ruta_toma, dur, formato)
+            
             tomas_mp4.append(str(ruta_toma))
             metricas["total_tomas"] += 1
             metricas["duracion_total_tomas"] += dur
 
-        # 5. Concatenar
+        # 4. Concatenar tomas de la escena
         ruta_visual = RECURSOS / f"vis_{num_escena:02d}.mp4"
         with open(RECURSOS / f"list_{num_escena:02d}.txt", "w") as f:
             for t in tomas_mp4: f.write(f"file '{Path(t).resolve()}'\n")
         ejecutar_comando_ffmpeg([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(RECURSOS / f"list_{num_escena:02d}.txt"), "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-pix_fmt", "yuv420p", "-r", str(FPS), "-an", str(ruta_visual)])
 
-        # 6. Subtítulos Básicos
+        # 5. Añadir voz y scroll stopper (solo escena 1)
         cmd_comp = [ffmpeg, "-y", "-i", str(ruta_visual), "-i", str(ruta_voz)]
-        
-        # Scroll stopper en la primera escena
         if num_escena == 0:
             cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", scroll])
             cmd_comp.extend(["-filter_complex", f"[0:v][2:v]overlay=0:0:enable='between(t,0,2)'[vout]", "-map", "[vout]", "-map", "1:a"])
@@ -381,7 +422,7 @@ async def crear_video():
         escenas_finales.append(str(ruta_final_escena))
         duraciones_finales.append(obtener_duracion_media(ffmpeg, ruta_final_escena))
 
-    # 7. Unir Escenas
+    # 6. Unir escenas con XFade
     print("\n[RENDER] Uniendo escenas...")
     video_unido = OUTPUT / "base.mp4"
     if len(escenas_finales) > 1:
@@ -398,7 +439,7 @@ async def crear_video():
     else:
         shutil.copy2(escenas_finales[0], video_unido)
 
-    # 8. Mezcla Final
+    # 7. Mezcla final (música, ducking, barra roja)
     dur_total = obtener_duracion_media(ffmpeg, video_unido)
     musica = generar_musica(max(10, int(dur_total) + 5))
     whooshes = [whoosh] * int(dur_total // 2)
@@ -408,7 +449,7 @@ async def crear_video():
     
     metricas["promedio_toma"] = metricas["duracion_total_tomas"] / max(1, metricas["total_tomas"])
     evaluar_y_mutar(CONFIG, metricas)
-    print("\n✅ PRODUCCIÓN COMPLETADA")
+    print("\n✅ PRODUCCIÓN COMPLETADA CON AGNES VIDEO")
     return str(destino)
 
 if __name__ == "__main__":
