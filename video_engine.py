@@ -6,127 +6,124 @@ import urllib.parse
 import os
 from pathlib import Path
 
-ARCHIVO_GUION = Path("guion.json")
+ARCHIVO_SERIE = Path("guion_serie.json")
+ARCHIVO_ESTADO = Path("estado_serie.json")
 ARCHIVO_HISTORIAL = Path("historial_creativo.json")
 
-# --- COMBINADOR INFINITO (Para el plan de respaldo) ---
-PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada", "un hacker adolescente", "un policía corrupto", "un médico del turno nocturno", "un astronauta varado"]
-ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor", "una casa inteligente", "un laboratorio subterráneo", "una biblioteca antigua", "un crucero en el medio del océano", "un pueblo fantasma"]
-OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "un teléfono que solo recibe llamadas", "una llave que no abre nada", "un diario con páginas en blanco", "una muñeca rota", "una grabación de voz", "una fotografía que cambia"]
+# Combinador aleatorio para respaldo
+PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada"]
+ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor"]
+OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "una llave que no abre nada"]
 
-GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana"]
-VOCES = ["es-MX-DaliaNeural", "es-MX-JorgeNeural"]
+def cargar_estado():
+    if ARCHIVO_ESTADO.exists():
+        with open(ARCHIVO_ESTADO, "r") as f: return json.load(f)
+    return {"serie_actual": None, "parte_actual": 1, "total_partes": 5}
+
+def guardar_estado(estado):
+    with open(ARCHIVO_ESTADO, "w") as f: json.dump(estado, f, indent=4)
 
 def cargar_historial():
     if ARCHIVO_HISTORIAL.exists():
         try:
-            with open(ARCHIVO_HISTORIAL, "r", encoding="utf-8") as f: return json.load(f)
+            with open(ARCHIVO_HISTORIAL, "r") as f: return json.load(f)
         except: return []
     return []
 
 def guardar_historial(titulo):
-    historial = cargar_historial()
-    historial.append(titulo)
-    with open(ARCHIVO_HISTORIAL, "w", encoding="utf-8") as f:
-        json.dump(historial[-30:], f, ensure_ascii=False, indent=4)
+    hist = cargar_historial()
+    hist.append(titulo)
+    with open(ARCHIVO_HISTORIAL, "w") as f: json.dump(hist[-30:], f, indent=4)
 
 def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key: return None
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     for modelo in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
-        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un director de cine de élite. Creas guiones estructurados y únicos."}, {"role": "user", "content": prompt}], "temperature": 0.9, "response_format": {"type": "json_object"}}
+        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un guionista experto en mini-series."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
         try:
             resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
             if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
         except: pass
     return None
 
-def generar_con_pollinations(prompt):
-    try:
-        url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}?model=openai&json=true"
-        resp = requests.get(url, timeout=90)
-        if resp.status_code == 200: return json.loads(resp.text)
-    except: pass
-    return None
-
-def crear_plan_de_produccion():
-    genero = random.choice(GENEROS)
-    voz = random.choice(VOCES)
+def crear_nueva_serie():
     historial = cargar_historial()
     temas_prohibidos = ", ".join(historial) if historial else "Ninguno"
-
-    # DECISIÓN ALEATORIA: ¿Mini-serie o Video Único?
-    es_mini_serie = random.choice([True, False])
-    formato = "MINI-SERIE (3 PARTES)" if es_mini_serie else "VIDEO ÚNICO (AUTOCONCLUSIVO)"
-    print(f"[DIRECTOR] Creando: {genero} | Formato: {formato} | Voz: {voz}")
-
-    if es_mini_serie:
-        prompt = f"""
-        Actúa como un director de cine. Crea una MINI-SERIE de 3 partes del género '{genero}'.
-        NO USES estos temas anteriores: {temas_prohibidos}.
-        
-        DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
-        {{
-            "titulo": "Título impactante",
-            "guion_largo": "Historia completa de 2500 palabras.",
-            "shorts": [
-                {{"parte": 1, "gancho": "Texto de 40 segundos que enganche y diga 'Parte 1'."}},
-                {{"parte": 2, "gancho": "Texto de 40 segundos que enganche y diga 'Parte 2'."}},
-                {{"parte": 3, "gancho": "Texto de 40 segundos que diga 'Parte 3' y llame a ver el video completo."}}
-            ]
-        }}
-        """
-    else:
-        prompt = f"""
-        Actúa como un director de cine. Crea un VIDEO ÚNICO autoconclusivo del género '{genero}'.
-        NO USES estos temas anteriores: {temas_prohibidos}.
-        
-        DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
-        {{
-            "titulo": "Título impactante",
-            "guion_largo": "Historia completa de 2500 palabras.",
-            "shorts": [
-                {{"parte": 1, "gancho": "Texto de 40 segundos que resuma la historia completa y invite a ver el video largo."}}
-            ]
-        }}
-        """
-
-    plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
-
-    # --- PLAN DE RESPALDO ANTI-REPETICIÓN ---
-    if not plan or "shorts" not in plan:
-        print("[AVISO] IAs fallaron. Generando historia única con Combinador Aleatorio.")
+    
+    prompt = f"""
+    Crea una MINI-SERIE de misterio de 5 episodios.
+    NO USES estos temas anteriores: {temas_prohibidos}.
+    Cada episodio debe durar 1 minuto en formato de narración (aprox 150 palabras). Cada episodio debe terminar en un CLIFFHANGER (suspenso).
+    
+    DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
+    {{
+        "titulo_serie": "Título impactante",
+        "episodios": [
+            {{"parte": 1, "titulo_episodio": "El inicio", "narracion": "Texto de 1 minuto.", "prompt_visual": "Prompt en inglés para la imagen de fondo del episodio 1."}},
+            {{"parte": 2, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
+            {{"parte": 3, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
+            {{"parte": 4, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
+            {{"parte": 5, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}}
+        ]
+    }}
+    """
+    
+    plan = generar_con_groq(prompt)
+    
+    if not plan or "episodios" not in plan:
+        print("[AVISO] IA falló. Creando serie de respaldo única.")
         p = random.choice(PERSONAJES)
         e = random.choice(ESCENARIOS)
         o = random.choice(OBJETOS)
-        
-        titulo = f"El secreto de {o} en {e}"
         plan = {
-            "titulo": titulo,
-            "guion_largo": f"{p.capitalize()} entró a {e} y encontró {o}. A partir de ese momento, nada volvió a ser igual. La historia completa te dejará sin aliento.",
-            "shorts": [
-                {"parte": 1, "gancho": f"Parte 1: {p.capitalize()} estaba en {e}. Encontró {o}. Pero había un problema..."},
-                {"parte": 2, "gancho": f"Parte 2: Lo que {p} descubrió sobre {o} cambió las reglas."},
-                {"parte": 3, "gancho": f"Parte 3: El final de esta historia te dejará helado. Mira el video completo."}
+            "titulo_serie": f"El enigma de {o} en {e}",
+            "episodios": [
+                {"parte": 1, "titulo_episodio": "El descubrimiento", "narracion": f"{p.capitalize()} llegó a {e} y encontró {o}. Un ruido extraño lo hizo girar.", "prompt_visual": f"Cinematic, vertical, {p} in {e} holding {o}"},
+                {"parte": 2, "titulo_episodio": "La primera pista", "narracion": f"Al inspeccionar {o}, {p} notó algo imposible. Una inscripción que no debía estar ahí.", "prompt_visual": f"Cinematic, vertical, close up of {o}"},
+                {"parte": 3, "titulo_episodio": "El acecho", "narracion": f"De repente, las luces se apagaron. Alguien más estaba en {e}.", "prompt_visual": f"Cinematic, vertical, {p} looking scared in the dark"},
+                {"parte": 4, "titulo_episodio": "La revelación", "narracion": f"{p.capitalize()} descubrió la verdad sobre {o}. Todo era una trampa.", "prompt_visual": f"Cinematic, vertical, mysterious figure revealing the truth"},
+                {"parte": 5, "titulo_episodio": "El final", "narracion": f"La huida final. {p.capitalize()} logró escapar, pero algo lo perseguirá.", "prompt_visual": f"Cinematic, vertical, {p} running away at night"}
             ]
         }
 
-    guardar_historial(plan["titulo"])
+    guardar_historial(plan["titulo_serie"])
+    return plan
 
-    return {
-        "titulo": plan["titulo"],
-        "voz": voz,
-        "formato_episodico": es_mini_serie,
-        "guion_largo": [{"narracion": plan["guion_largo"]}],
-        "shorts": plan["shorts"]
+def obtener_guion_hoy():
+    estado = cargar_estado()
+    
+    # Si no hay serie o terminó, crear nueva
+    if estado["serie_actual"] is None or estado["parte_actual"] > estado["total_partes"]:
+        print("[SISTEMA] Iniciando nueva mini-serie de 5 partes...")
+        nueva_serie = crear_nueva_serie()
+        with open(ARCHIVO_SERIE, "w") as f: json.dump(nueva_serie, f, ensure_ascii=False, indent=4)
+        estado = {"serie_actual": nueva_serie["titulo_serie"], "parte_actual": 1, "total_partes": 5}
+        guardar_estado(estado)
+        
+    with open(ARCHIVO_SERIE, "r") as f: serie = json.load(f)
+    
+    parte = estado["parte_actual"]
+    print(f"[SISTEMA] Generando Parte {parte} de 5: {serie['titulo_serie']}")
+    
+    episodio_hoy = serie["episodios"][parte - 1]
+    
+    guion_hoy = {
+        "titulo_serie": serie["titulo_serie"],
+        "parte": parte,
+        "titulo_episodio": episodio_hoy["titulo_episodio"],
+        "narracion": episodio_hoy["narracion"],
+        "prompt_visual": episodio_hoy["prompt_visual"],
+        "voz": "es-MX-DaliaNeural"
     }
-
-def guardar_guion():
-    guion = crear_plan_de_produccion()
-    with open(ARCHIVO_GUION, "w", encoding="utf-8") as f:
-        json.dump(guion, f, ensure_ascii=False, indent=4)
-    print(f"GUION GUARDADO: {guion['titulo']} | Mini-serie: {guion['formato_episodico']}")
+    
+    with open("guion.json", "w") as f: json.dump(guion_hoy, f, ensure_ascii=False, indent=4)
+    
+    # Preparar siguiente parte
+    estado["parte_actual"] += 1
+    guardar_estado(estado)
+    
+    return guion_hoy
 
 if __name__ == "__main__":
-    guardar_guion()
+    obtener_guion_hoy()
