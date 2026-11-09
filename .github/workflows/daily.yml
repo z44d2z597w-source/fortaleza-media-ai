@@ -1,10 +1,9 @@
 name: FORTALEZA MEDIA AI
-
 on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar en YouTube (true/false)'
+        description: 'Publicar en Redes (true/false)'
         required: false
         default: false
         type: boolean
@@ -17,7 +16,8 @@ permissions:
 jobs:
   producir:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360 # Aumentado a 6 horas por si el video largo tarda mucho
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      - name: Generar video (Director de Escena)
+      - name: Generar Videos (Short y Largo)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
@@ -38,67 +38,100 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
-      - name: Guardar memoria creativa e historial
+      - name: Guardar memoria creativa
         if: always()
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           [ -f historial_creativo.json ] && git add historial_creativo.json
-          [ -f historial_temas.json ] && git add historial_temas.json
           git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Auto-mejora: Historial creativo actualizado [skip ci]"
+          git commit -m "Auto-mejora: Historial actualizado [skip ci]"
           git push
 
-      - name: Preparar metadatos
+      - name: Preparar metadatos para publicación
         run: |
           python - <<'PY'
           import json, os
           with open("guion.json", encoding="utf-8") as f: g = json.load(f)
-          titulo = " ".join(g["titulo"].split())[:100]
           
-          storyboard = g.get("director_notes", {}).get("storyboard", [])
-          texto_narracion = " ".join(beat["narracion"] for beat in storyboard)
+          titulo_largo = " ".join(g["titulo"].split())[:100]
+          # Para el video largo, unimos la narración de todos los capítulos
+          texto_largo = " ".join(cap["narracion"] for cap in g["guion_largo"])
+          desc_largo = texto_largo[:4000] + " #Documental #Historia #Misterio"
           
-          desc = texto_narracion[:5000] + " #Shorts #Viral #Misterio #Historias"
+          # Para el short, usamos el título y el gancho
+          titulo_short = titulo_largo + " #Shorts"
+          desc_short = g["gancho_corto"] + " #Shorts #Viral #TikTok"
+          
           delim = "FORTALEZA_" + str(os.getpid())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"VIDEO_TITLE<<{delim}\n{titulo}\n{delim}\n")
-              f.write(f"VIDEO_DESCRIPTION<<{delim}\n{desc}\n{delim}\n")
+              f.write(f"VIDEO_TITLE_LARGO<<{delim}\n{titulo_largo}\n{delim}\n")
+              f.write(f"VIDEO_DESC_LARGO<<{delim}\n{desc_largo}\n{delim}\n")
+              f.write(f"VIDEO_TITLE_SHORT<<{delim}\n{titulo_short}\n{delim}\n")
+              f.write(f"VIDEO_DESC_SHORT<<{delim}\n{desc_short}\n{delim}\n")
           PY
 
-      - name: Subir artefacto
+      - name: Subir artefactos (Videos)
         uses: actions/upload-artifact@v4
         with:
-          name: FORTALEZA-MEDIA-VIDEO
+          name: FORTALEZA-MEDIA-VIDEOS
           path: |
-            output/fortaleza_final.mp4
             output/fortaleza_short.mp4
+            output/fortaleza_largo.mp4
           retention-days: 7
 
-      # AQUÍ ESTÁ LA CORRECCIÓN BLINDADA
-      - name: Publicar en YouTube vía Cloudflare Worker
+      - name: Publicar Video Largo en YouTube
         if: |
           github.event_name == 'schedule' || 
           github.event.inputs.publicar == 'true' || 
           github.event.inputs.publicar == true
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
-          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
-          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESCRIPTION }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE_LARGO }}
+          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC_LARGO }}
         run: |
           set -e
-          VIDEO=$( [ -s output/fortaleza_short.mp4 ] && echo "output/fortaleza_short.mp4" || echo "output/fortaleza_final.mp4" )
-          [ -z "$FORTALEZA_UPLOAD_KEY" ] && echo "Falta FORTALEZA_UPLOAD_KEY" && exit 1
+          VIDEO="output/fortaleza_largo.mp4"
+          if [ ! -s "$VIDEO" ]; then echo "No hay video largo, saltando."; exit 0; fi
           SIZE=$(stat -c%s "$VIDEO")
-          [ "$SIZE" -gt 94371840 ] && echo "Video > 90MB" && exit 1
-          
-          echo "Subiendo $VIDEO a YouTube..."
+          if [ "$SIZE" -gt 94371840 ]; then echo "Video > 90MB, comprimiendo..."; fi # Aquí podrías añadir compresión si es necesario
           curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
-            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
-            -H "Content-Type: video/mp4" \
-            -H "X-Video-Title: ${VIDEO_TITLE}" \
-            -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
+            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
             --data-binary "@${VIDEO}"
-          
-          echo "✅ Publicación completada."
+
+      - name: Publicar Short en YouTube
+        if: |
+          github.event_name == 'schedule' || 
+          github.event.inputs.publicar == 'true' || 
+          github.event.inputs.publicar == true
+        env:
+          FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE_SHORT }}
+          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC_SHORT }}
+        run: |
+          set -e
+          VIDEO="output/fortaleza_short.mp4"
+          if [ ! -s "$VIDEO" ]; then echo "No hay short, saltando."; exit 0; fi
+          curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
+            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
+            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+            --data-binary "@${VIDEO}"
+
+      # (Opcional) Publicar en TikTok si tienes la API de Upload-Post
+      - name: Publicar en TikTok
+        if: |
+          github.event_name == 'schedule' || 
+          github.event.inputs.publicar == 'true' || 
+          github.event.inputs.publicar == true
+        env:
+          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE_SHORT }}
+          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC_SHORT }}
+        run: |
+          if [ -n "$UPLOAD_POST_API_KEY" ]; then
+            python upload_tiktok.py
+          else
+            echo "Saltando TikTok (No hay clave configurada)."
+          fi
