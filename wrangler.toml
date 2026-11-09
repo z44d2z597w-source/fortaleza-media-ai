@@ -1,0 +1,7 @@
+name = "fortaleza-youtube-auth"
+main = "worker.js"
+compatibility_date = "2026-11-08"
+
+[[kv_namespaces]]
+binding = "YOUTUBE_TOKENS"
+id = "68fd2551ce9742fca5cc2de00dad17b9"
