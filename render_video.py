@@ -7,6 +7,7 @@ import random
 import re
 import shutil
 import subprocess
+import time
 import wave
 from array import array
 from io import BytesIO
@@ -21,8 +22,8 @@ from PIL import (
 )
 
 # ==========================================================
-# FORTALEZA MEDIA AI 10.6
-# OPTIMIZACIÓN DE PESO (SIN NOISE, CRF 26, MAXRATE)
+# FORTALEZA MEDIA AI 11.0
+# GENERACIÓN DE VIDEO POR IA (MAGIC HOUR) COMO RESPALDO
 # ==========================================================
 
 FPS = 30
@@ -48,7 +49,10 @@ PALABRAS_IMPACTO = [
     "asombroso", "oculto", "verdad", "ciencia", "descubrimiento"
 ]
 
-CABECERAS = {"User-Agent": "FORTALEZA-MEDIA-AI/10.6"}
+CABECERAS = {
+    "User-Agent": "FortalezaMediaAI/11.0 (https://github.com/z44d2z597w-source/fortaleza-media-ai) python-requests"
+}
+
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"), ("#180D2C", "#43205E", "#B56CFF"),
     ("#111B18", "#245B43", "#65D6A0"), ("#29100D", "#74301F", "#FFAD64"),
@@ -156,7 +160,7 @@ def asignar_recursos(recursos, num_tomas):
     return [recursos[i % len(recursos)] for i in range(num_tomas)]
 
 # ==========================================================
-# FORMATO Y BÚSQUEDA (PIXABAY + WIKIMEDIA)
+# FORMATO Y BÚSQUEDA
 # ==========================================================
 
 def seleccionar_formato(guion):
@@ -181,10 +185,8 @@ def buscar_clips(titulo, narracion, numero, formato):
     clave = os.environ.get("PIXABAY_API_KEY")
     if not clave: return []
     consulta = crear_busqueda(titulo, narracion)
-    print("[VIDEO] Buscando B-roll:", consulta)
     url = "https://pixabay.com/api/videos/"
     parametros = {"key": clave, "q": consulta, "orientation": formato["orientacion"], "per_page": 10, "safesearch": "true"}
-
     try:
         respuesta = requests.get(url, params=parametros, timeout=20)
         hits = respuesta.json().get("hits", [])
@@ -203,6 +205,7 @@ def buscar_clips(titulo, narracion, numero, formato):
                 descarga.raise_for_status()
                 with open(ruta, "wb") as f:
                     for chunk in descarga.iter_content(chunk_size=8192): f.write(chunk)
+            if os.path.getsize(ruta) < 10000: continue
             resultados.append({"tipo": "video", "archivo": str(ruta), "autor": hit.get("user", "Pixabay"), "licencia": "Pixabay License", "url": hit.get("pageURL", "")})
             if len(resultados) >= 3: break
         except Exception: pass
@@ -234,26 +237,83 @@ def buscar_fotografias(titulo, narracion, numero):
     return resultados
 
 # ==========================================================
-# GENERADORES DE IMÁGENES (LOWER THIRD, TEXTOS, FONDOS)
+# GENERACIÓN DE VIDEO CON IA (MAGIC HOUR)
 # ==========================================================
+
+def generar_video_ia(prompt, numero, formato, duracion_sugerida=4):
+    """Llama a Magic Hour para generar un video corto a partir de un prompt."""
+    api_key = os.environ.get("MAGIC_HOUR_API_KEY")
+    if not api_key:
+        print("[IA] No hay MAGIC_HOUR_API_KEY. Saltando generación por IA.")
+        return None
+
+    # Magic Hour usa la API en https://api.magichour.ai/v1
+    # El SDK de Python es más sencillo, pero aquí usamos requests directos.
+    url = "https://api.magichour.ai/v1/text-to-video"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    # Ajustar prompt y parámetros según el formato
+    payload = {
+        "prompt": prompt,
+        "model": "wan-2.2",  # Modelo gratuito según docs
+        "duration_seconds": min(duracion_sugerida, 5), # Límite para ahorrar créditos
+        "resolution": "480p",
+        "aspect_ratio": "9:16" if formato["nombre"] == "vertical" else "16:9"
+    }
+
+    print(f"[IA] Generando video con Magic Hour: {prompt[:60]}...")
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()
+        video_url = data.get("video_url")
+        if not video_url:
+            print("[IA] Magic Hour no devolvió video_url:", data)
+            return None
+        # Descargar el video generado
+        ruta = RECURSOS / f"ia_{numero:02d}.mp4"
+        with requests.get(video_url, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(ruta, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print(f"[IA] Video IA guardado en {ruta}")
+        return str(ruta)
+    except Exception as e:
+        print("[IA] Error al generar video con Magic Hour:", e)
+        return None
+
+# ==========================================================
+# GENERADORES DE IMÁGENES (FONDOS DE RESPALDO)
+# ==========================================================
+
+def crear_fondo(numero, ancho, alto):
+    oscuro, medio, acento = PALETAS[numero % len(PALETAS)]
+    gradiente = Image.linear_gradient("L").resize((ancho, alto))
+    imagen = ImageOps.colorize(gradiente, black=oscuro, white=medio).convert("RGB")
+    dibujo = ImageDraw.Draw(imagen, "RGBA")
+    rgb = color_rgb(acento)
+    for i in range(10):
+        radio = 100 + i * 80
+        dibujo.ellipse(
+            (int(ancho*0.72)-radio, int(alto*0.2)+i*100-radio,
+             int(ancho*0.72)+radio, int(alto*0.2)+i*100+radio),
+            outline=(*rgb, max(10, 65 - i * 5)), width=4,
+        )
+    return imagen
 
 def crear_lower_third(titulo, formato, acento, numero):
     ancho, alto = formato["ancho"], formato["alto"]
     imagen = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
     dibujo = ImageDraw.Draw(imagen)
-    
     x = int(ancho * 0.06)
     y = int(alto * 0.68)
     ancho_lt = int(ancho * 0.75)
     alto_lt = int(alto * 0.12)
-    
-    dibujo.rounded_rectangle(
-        (x, y, x + ancho_lt, y + alto_lt),
-        radius=15, fill=(0, 0, 0, 190),
-        outline=(*color_rgb(acento), 255), width=4
-    )
+    dibujo.rounded_rectangle((x, y, x + ancho_lt, y + alto_lt), radius=15, fill=(0, 0, 0, 190), outline=(*color_rgb(acento), 255), width=4)
     dibujo.rectangle((x, y, x + 10, y + alto_lt), fill=(*color_rgb(acento), 255))
-    
     font = fuente(int(ancho * 0.035), True)
     texto = titulo.upper()
     lineas = dividir_lineas(dibujo, texto, font, ancho_lt - 40)[:2]
@@ -261,7 +321,6 @@ def crear_lower_third(titulo, formato, acento, numero):
     for linea in lineas:
         dibujo.text((x + 35, yy), linea, font=font, fill="white")
         yy += int(ancho * 0.045)
-    
     ruta = RECURSOS / f"lower_third_{numero:02d}.png"
     imagen.save(ruta)
     return str(ruta)
@@ -274,7 +333,6 @@ def crear_texto_impacto(palabra, formato):
     font = fuente(tamano, True)
     dibujo.text((ancho//2 + 8, alto//2 + 8), palabra.upper(), font=font, fill=(0,0,0,200), anchor="mm")
     dibujo.text((ancho//2, alto//2), palabra.upper(), font=font, fill="white", anchor="mm", stroke_width=6, stroke_fill="#FF0055")
-    
     ruta = RECURSOS / f"impacto_{random.randint(1000,9999)}.png"
     imagen.save(ruta)
     return str(ruta)
@@ -287,25 +345,22 @@ def crear_escena(titulo, numero, total, fotografia, formato):
         imagen = ImageEnhance.Contrast(imagen).enhance(1.14)
         imagen = ImageEnhance.Brightness(imagen).enhance(0.85)
     else:
-        oscuro, medio, acento = PALETAS[numero % len(PALETAS)]
-        imagen = ImageOps.colorize(Image.linear_gradient("L").resize((ancho, alto)), black=oscuro, white=medio).convert("RGB")
+        imagen = crear_fondo(numero, ancho, alto)
 
     dibujo = ImageDraw.Draw(imagen)
     margen = int(ancho * 0.06)
     dibujo.text((margen, int(alto * 0.055)), "FORTALEZA MEDIA AI", font=fuente(int(ancho * 0.025), True), fill="white", stroke_width=2, stroke_fill="#000000")
-    
     if numero == 0:
         tamano = int(ancho * 0.068)
         font = fuente(tamano, True)
         lineas = dividir_lineas(dibujo, titulo.upper(), font, int(ancho * 0.86))[:3]
         dibujo.multiline_text((ancho//2, int(alto*0.30)), "\n".join(lineas), font=font, fill="white", anchor="mm", align="center", spacing=int(tamano*0.30), stroke_width=4, stroke_fill="#000000")
-
     ruta = RECURSOS / f"escena_{numero:02d}.jpg"
     imagen.save(ruta, quality=94)
     return str(ruta)
 
 # ==========================================================
-# AUDIO (VOZ, MÚSICA, SFX)
+# AUDIO
 # ==========================================================
 
 async def crear_voz(texto, ruta):
@@ -348,7 +403,7 @@ def crear_musica(ffmpeg, duracion):
     return str(ruta)
 
 # ==========================================================
-# RENDERIZADO DE TOMAS (CON ZOOM PUNCH Y GLITCH)
+# RENDERIZADO
 # ==========================================================
 
 def crear_toma(ffmpeg, recurso, destino, duracion, numero, formato, es_impacto=False):
@@ -378,10 +433,6 @@ def crear_toma(ffmpeg, recurso, destino, duracion, numero, formato, es_impacto=F
     else:
         ejecutar([ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", recurso, "-vf", filtro_str, "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", CRF, "-pix_fmt", "yuv420p", "-r", str(FPS), str(destino)])
 
-# ==========================================================
-# CONCATENACIÓN Y MEZCLA FINAL
-# ==========================================================
-
 def concatenar_tomas(ffmpeg, archivos, destino, lista):
     with open(lista, "w", encoding="utf-8") as f:
         for a in archivos: f.write(f"file '{Path(a).resolve()}'\n")
@@ -405,15 +456,10 @@ def mezclar_audio_y_barra(ffmpeg, video, musica, lista_whoosh, destino, duracion
     for i in range(len(lista_whoosh)):
         filtro_audio += f"[{i+2}:a]volume=0.5[w{i}];[base][w{i}]amix=inputs=2:duration=first[base];"
     filtro_audio += "[base]alimiter=limit=0.95[audio]"
-
-    # Se eliminó el filtro noise para bajar el peso, manteniendo vignette y eq
     filtro_video = f"[0:v]vignette=PI/5,eq=contrast=1.05:saturation=1.15,drawbox=x=0:y=h-8:w='iw*t/{duracion_total}':h=8:color=white@0.6:t=fill,format=yuv420p[vout]"
-
     filtro_total = filtro_video + ";" + filtro_audio
-
     cmd = [ffmpeg, "-y", "-i", video, "-stream_loop", "-1", "-i", musica]
     for w in lista_whoosh: cmd.extend(["-i", w])
-    # Se añade maxrate y bufsize para controlar el peso final
     cmd.extend(["-filter_complex", filtro_total, "-map", "[vout]", "-map", "[audio]", "-c:v", "libx264", "-preset", "medium", "-crf", CRF, "-maxrate", "6M", "-bufsize", "12M", "-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion_total:.3f}", "-movflags", "+faststart", destino])
     ejecutar(cmd)
 
@@ -433,7 +479,7 @@ async def crear_video():
     clips, duraciones, whooshes = [], [], []
     whoosh_base = crear_whoosh(ffmpeg, RECURSOS / "whoosh.wav")
 
-    print("=" * 60 + f"\nFORTALEZA MEDIA AI 10.6\nFORMATO: {formato['nombre']}\n" + "=" * 60)
+    print("=" * 60 + f"\nFORTALEZA MEDIA AI 11.0 (IA GENERATIVA)\nFORMATO: {formato['nombre']}\n" + "=" * 60)
 
     for numero, escena in enumerate(escenas):
         narracion = str(escena["narracion"]).strip()
@@ -446,15 +492,26 @@ async def crear_video():
         cortes = calcular_cortes(palabras, duracion)
         num_tomas = max(1, len(cortes) - 1)
 
+        # 1. Buscar clips reales
         clips_v = buscar_clips(titulo, narracion, numero, formato)
         recursos = [c["archivo"] for c in clips_v]
+        # 2. Buscar fotos
         if len(recursos) < num_tomas:
             recursos.extend([f["archivo"] for f in buscar_fotografias(titulo, narracion, numero)])
         
+        # 3. Si no hay material, generar con IA
         if not recursos:
-            img = RECURSOS / f"fondo_{numero:02d}.jpg"
-            Image.new("RGB", (formato["ancho"], formato["alto"]), "#000000").save(img)
-            recursos = [str(img)]
+            print("[IA] Sin material de stock. Llamando a Magic Hour...")
+            prompt = f"Cinematic {formato['nombre']} footage representing: {narracion[:150]}"
+            video_ia = generar_video_ia(prompt, numero, formato, duracion_sugerida=int(min(duracion, 5)))
+            if video_ia:
+                recursos = [video_ia]
+            else:
+                # 4. Último recurso: fondo de gradiente
+                print("[AVISO] IA no disponible. Usando fondo de gradiente.")
+                respaldo = RECURSOS / f"fondo_{numero:02d}.jpg"
+                crear_fondo(numero, formato["ancho"], formato["alto"]).save(respaldo, quality=92)
+                recursos = [str(respaldo)]
 
         recursos_asignados = asignar_recursos(recursos, num_tomas)
         
