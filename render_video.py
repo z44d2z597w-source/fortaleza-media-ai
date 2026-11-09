@@ -19,8 +19,8 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # ==========================================================
-# FORTALEZA MEDIA AI 27.0 — ECOSISTEMA HOLÍSTICO
-# COMBINA: AGNES + PEXELS + POLLINATIONS + MAGIC HOUR + JSON2VIDEO
+# FORTALEZA MEDIA AI 28.0 — ECOSISTEMA DE ASIGNACIÓN DINÁMICA
+# TODAS LAS IAs TRABAJAN EN EQUIPO POR ESCENA
 # ==========================================================
 
 FPS = 30
@@ -60,144 +60,126 @@ def calcular_cortes(palabras, duracion_total):
     return resultado
 
 # ==========================================================
-# LOS 5 MOTORES VISUALES (Para combinar y autorregularse)
+# DEFINICIÓN DE LOS MOTORES (Cada uno devuelve (ruta, es_video))
 # ==========================================================
 
-def motor_agnes(prompt, duracion, escena, toma):
+def intentar_agnes(prompt, duracion, escena, toma):
     key = os.environ.get("AGNES_API_KEY")
     if not key: return None
     try:
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        payload = {"model": "agnes-video-2.5-flash", "prompt": prompt, "duration": min(10, int(duracion)+1), "aspect_ratio": "9:16"}
-        resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=60)
+        payload = {"model": "agnes-video-2.5-flash", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
+        resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=30)
         task_id = resp.json().get("id") or resp.json().get("task_id")
         if task_id:
-            for _ in range(30):
-                time.sleep(10)
+            for _ in range(15): # Timeout más corto para no colgar el sistema
+                time.sleep(8)
                 poll = requests.get(f"https://apihub.agnes-ai.cn/v1/video/generations/{task_id}", headers=headers).json()
                 if poll.get("status") == "succeeded":
                     url = poll.get("output", {}).get("video_url")
                     if url:
                         ruta = RECURSOS / f"agnes_{escena}_{toma}.mp4"
-                        with requests.get(url, stream=True, timeout=120) as r:
+                        with requests.get(url, stream=True, timeout=60) as r:
                             r.raise_for_status()
                             with open(ruta, "wb") as f:
                                 for chunk in r.iter_content(8192): f.write(chunk)
-                        print("    -> [AGNES] Video IA generado.")
+                        print(f"    -> [AGNES] Video IA generado.")
                         return str(ruta), True
                 elif poll.get("status") == "failed": break
     except Exception: pass
     return None
 
-def motor_magichour(prompt, duracion, escena, toma):
+def intentar_magichour(prompt, duracion, escena, toma):
     key = os.environ.get("MAGIC_HOUR_API_KEY")
     if not key: return None
     try:
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(10, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
-        resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=60)
+        payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
+        resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=30)
         url = resp.json().get("video_url")
         if url:
             ruta = RECURSOS / f"mh_{escena}_{toma}.mp4"
-            with requests.get(url, stream=True, timeout=120) as r:
+            with requests.get(url, stream=True, timeout=60) as r:
                 with open(ruta, "wb") as f:
                     for chunk in r.iter_content(8192): f.write(chunk)
-            print("    -> [MAGIC HOUR] Video IA generado.")
+            print(f"    -> [MAGIC HOUR] Video IA generado.")
             return str(ruta), True
     except Exception: pass
     return None
 
-def motor_json2video(prompt, duracion, escena, toma):
-    key = os.environ.get("JSON2VIDEO_API_KEY")
-    if not key: return None
-    try:
-        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-        payload = {"template_id": "default", "scenes": [{"text": prompt[:200], "duration": min(10, int(duracion)+1)}], "resolution": "1080x1920"}
-        resp = requests.post("https://api.json2video.com/v1/projects", headers=headers, json=payload, timeout=60)
-        proj_id = resp.json().get("project_id")
-        if proj_id:
-            for _ in range(30):
-                time.sleep(10)
-                poll = requests.get(f"https://api.json2video.com/v1/projects/{proj_id}", headers=headers).json()
-                if poll.get("status") == "completed":
-                    url = poll.get("video_url")
-                    if url:
-                        ruta = RECURSOS / f"j2v_{escena}_{toma}.mp4"
-                        with requests.get(url, stream=True) as r:
-                            with open(ruta, "wb") as f:
-                                for chunk in r.iter_content(8192): f.write(chunk)
-                        print("    -> [JSON2VIDEO] Video IA generado.")
-                        return str(ruta), True
-    except Exception: pass
-    return None
-
-def motor_pexels(prompt, escena, toma):
-    key = os.environ.get("PEXELS_API_KEY")
+def intentar_pixabay(prompt, escena, toma):
+    key = os.environ.get("PIXABAY_API_KEY")
     if not key: return None
     try:
         query = " ".join(re.findall(r"[a-zA-Z]{4,}", prompt)[:3])
-        headers = {"Authorization": key}
-        resp = requests.get(f"https://api.pexels.com/videos/search?query={query}&orientation=portrait&per_page=3", headers=headers, timeout=20).json()
-        for video in resp.get("videos", []):
-            url = video["video_files"][0]["link"]
-            ruta = RECURSOS / f"pexels_{escena}_{toma}.mp4"
-            with requests.get(url, stream=True) as r:
-                with open(ruta, "wb") as f:
-                    for chunk in r.iter_content(8192): f.write(chunk)
-            if os.path.getsize(ruta) > 15000: 
-                print("    -> [PEXELS] Video Stock generado.")
-                return str(ruta), True
+        resp = requests.get("https://pixabay.com/api/videos/", params={"key": key, "q": query, "orientation": "vertical", "per_page": 3}, timeout=15).json()
+        for hit in resp.get("hits", []):
+            url = hit.get("videos", {}).get("medium", {}).get("url")
+            if url:
+                ruta = RECURSOS / f"pixabay_{escena}_{toma}.mp4"
+                with requests.get(url, stream=True, timeout=20) as r:
+                    with open(ruta, "wb") as f:
+                        for chunk in r.iter_content(8192): f.write(chunk)
+                if os.path.getsize(ruta) > 15000:
+                    print(f"    -> [PIXABAY] Video de stock generado.")
+                    return str(ruta), True
     except Exception: pass
     return None
 
-def motor_pollinations(prompt, escena, toma, formato):
+def intentar_pollinations(prompt, escena, toma, formato):
     try:
         url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true"
-        resp = requests.get(url, timeout=60)
+        resp = requests.get(url, timeout=45)
         img = Image.open(BytesIO(resp.content)); img.verify()
         ruta = RECURSOS / f"poll_{escena}_{toma}.jpg"
         with open(ruta, "wb") as f: f.write(resp.content)
-        print("    -> [POLLINATIONS] Imagen IA generada.")
+        print(f"    -> [POLLINATIONS] Imagen IA generada.")
         return str(ruta), False
     except Exception: pass
     return None
 
-def motor_emergencia(escena, toma, formato):
+def intentar_fondo_premium(escena, toma, formato):
     ancho, alto = formato["ancho"], formato["alto"]
     img = ImageOps.colorize(Image.linear_gradient("L").resize((ancho, alto)), black="#071426", white="#123D60").convert("RGB")
     ruta = RECURSOS / f"fondo_{escena}_{toma}.jpg"
     img.save(ruta)
-    print("    -> [EMERGENCIA] Fondo premium generado.")
+    print(f"    -> [EMERGENCIA] Fondo premium generado.")
     return str(ruta), False
 
 # ==========================================================
-# LÓGICA DE COMBINACIÓN HOLÍSTICA
+# ASIGNACIÓN DINÁMICA POR ESCENA
 # ==========================================================
 
 def obtener_material_visual(prompt, escena_idx, toma_idx, duracion, formato, tipo_escena):
     """
-    Reparte el trabajo. Si un motor falla, pasa al siguiente en la lista.
+    Aquí es donde el equipo trabaja junto. 
+    Dependiendo de la escena, asignamos un orden de prioridad diferente.
     """
-    # Definimos la estrategia según el tipo de escena para que se complementen
     if tipo_escena == "gancho":
-        motores = [motor_agnes, motor_magichour, motor_pexels, motor_pollinations]
-    elif tipo_escena in ["desarrollo", "contexto"]:
-        motores = [motor_pexels, motor_pollinations, motor_agnes]
-    else: # climax, cierre
-        motores = [motor_json2video, motor_agnes, motor_pexels, motor_pollinations]
+        # Para el gancho queremos VIDEO IA a toda costa
+        orden = [intentar_agnes, intentar_magichour, intentar_pixabay, intentar_pollinations]
+    elif tipo_escena == "contexto":
+        # Para el contexto queremos STOCK rápido
+        orden = [intentar_pixabay, intentar_pollinations, intentar_agnes]
+    elif tipo_escena in ["desarrollo", "climax"]:
+        # Para el desarrollo queremos IMAGEN IA (Pollinations) o Agnes
+        orden = [intentar_pollinations, intentar_agnes, intentar_pixabay]
+    else: # cierre
+        orden = [intentar_pixabay, intentar_pollinations, intentar_agnes]
 
-    for motor in motores:
-        if motor in [motor_agnes, motor_magichour, motor_json2video]:
+    # El equipo se pasa la pelota
+    for motor in orden:
+        if motor in [intentar_agnes, intentar_magichour]:
             res = motor(prompt, duracion, escena_idx, toma_idx)
-        elif motor == motor_pexels:
+        elif motor == intentar_pixabay:
             res = motor(prompt, escena_idx, toma_idx)
         else:
             res = motor(prompt, escena_idx, toma_idx, formato)
             
-        if res: return res # Éxito, devolvemos el video o la imagen
+        if res: return res # Si tiene éxito, se devuelve y pasamos a la siguiente toma
 
-    # Si absolutamente todos fallan
-    return motor_emergencia(escena_idx, toma_idx, formato)
+    # Si todos fallan, entra el fondo de emergencia
+    return intentar_fondo_premium(escena_idx, toma_idx, formato)
 
 # ==========================================================
 # AUDIO Y RENDERIZADO
@@ -256,7 +238,7 @@ async def crear_video():
             if d_toma <= 0.4: continue
             prompt = f"{estilo}, vertical 9:16, {narracion[:100]}"
             
-            # EL SISTEMA HOLÍSTICO ELIGE Y COMBINA
+            # EL EQUIPO TRABAJA EN CONJUNTO SEGÚN LA ESCENA
             recurso, es_video = obtener_material_visual(prompt, i, j, d_toma, formato, tipo)
             
             ruta_toma = RECURSOS / f"toma_{i}_{j}.mp4"
@@ -290,7 +272,7 @@ async def crear_video():
     destino = OUTPUT / "fortaleza_final.mp4"
     shutil.copy2(video_unido, destino)
     shutil.copy2(destino, OUTPUT / "fortaleza_short.mp4")
-    print("\n✅ PRODUCCIÓN HOLÍSTICA COMPLETADA")
+    print("\n✅ PRODUCCIÓN COMPLETADA CON TRABAJO EN EQUIPO")
     return str(destino)
 
 if __name__ == "__main__":
