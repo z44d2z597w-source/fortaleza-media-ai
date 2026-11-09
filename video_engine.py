@@ -9,6 +9,31 @@ import os
 
 ARCHIVO_GUION = Path("guion.json")
 
+# Catálogos para la Generación Procedural (Originalidad)
+GENEROS = [
+    "Terror psicológico", 
+    "Misterio histórico", 
+    "Ciencia ficción distópica", 
+    "Drama familiar intenso", 
+    "Leyenda urbana mexicana",
+    "Conspiración tecnológica"
+]
+
+ESTILOS_VISUALES = [
+    "Cinematic 8k, hyper-realistic, dramatic lighting",
+    "Dark fantasy oil painting, gothic, moody",
+    "Vintage 35mm film photography, grainy, nostalgic",
+    "Cyberpunk neon, futuristic, glowing",
+    "Anime style, Studio Ghibli, vivid colors",
+    "Surrealist dreamscape, ethereal, glowing"
+]
+
+VOCES_DISPONIBLES = [
+    "es-MX-DaliaNeural", # Femenina
+    "es-MX-JorgeNeural", # Masculina
+    "es-MX-CeciliaNeural" # Femenina alternativa
+]
+
 def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
@@ -19,31 +44,28 @@ def generar_con_groq(prompt):
     payload = {
         "model": "llama-3.1-8b-instant",
         "messages": [
-            {"role": "system", "content": "Eres un guionista experto en videos virales de YouTube Shorts. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
+            {"role": "system", "content": "Eres un guionista experto en videos virales. Escribes en español mexicano, con un tono dramático, directo y adictivo. Sigues las instrucciones al pie de la letra."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.7,
+        "temperature": 0.8, # Subimos la temperatura para más creatividad
         "max_tokens": 800
     }
     
     try:
         respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
         respuesta.raise_for_status()
-        print("[GROQ] ¡Conexión exitosa! Guion generado.")
+        print("[GROQ] ¡Conexión exitosa! Guion original generado.")
         return respuesta.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(f"[GROQ] Error de conexión: {e}")
         return None
 
 def estructurar_guion(texto_ia, titulo):
-    # Limpiamos el texto por si la IA pone "Escena 1:" o comillas
     texto_ia = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto_ia, flags=re.IGNORECASE|re.MULTILINE).strip()
     oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto_ia) if len(o.strip()) > 10]
     
-    if len(oraciones) < 5: 
-        return None
+    if len(oraciones) < 5: return None
 
-    # Dividimos en las 5 escenas exactas
     quinto = max(1, len(oraciones) // 5)
     escenas = [
         {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": " ".join(oraciones[:quinto])},
@@ -53,42 +75,54 @@ def estructurar_guion(texto_ia, titulo):
         {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": " ".join(oraciones[quinto*4:])}
     ]
     
-    # Aseguramos que ninguna escena esté vacía
     for i in range(1, 5):
-        if not escenas[i]["narracion"]: 
-            escenas[i]["narracion"] = escenas[i-1]["narracion"]
+        if not escenas[i]["narracion"]: escenas[i]["narracion"] = escenas[i-1]["narracion"]
 
-    return {"titulo": titulo, "formato": "vertical", "duracion": 60, "escenas": escenas}
+    return escenas
 
 def crear_guion():
+    # 1. Elegir el género, estilo y voz al azar
+    genero_elegido = random.choice(GENEROS)
+    estilo_elegido = random.choice(ESTILOS_VISUALES)
+    voz_elegida = random.choice(VOCES_DISPONIBLES)
+    
+    print(f"[ORIGINALIDAD] Género: {genero_elegido}")
+    print(f"[ORIGINALIDAD] Estilo Visual: {estilo_elegido}")
+    print(f"[ORIGINALIDAD] Voz: {voz_elegida}")
+
     prompt = (
-        "Escribe un guion para un video vertical de YouTube Shorts sobre 'una desaparición inexplicable'. "
+        f"Escribe un guion para un video vertical de YouTube Shorts del género '{genero_elegido}'. "
         "La historia debe tener exactamente esta estructura de 5 escenas, separadas por saltos de línea: "
         "1. Gancho (una frase de 5-8 palabras que impacte). "
-        "2. Contexto (la situación inicial). "
-        "3. Desarrollo (el conflicto o problema). "
-        "4. Clímax (la revelación o el giro inesperado). "
-        "5. Cierre (una frase que conecte con el inicio para crear un loop). "
-        "Usa un tono dramático y directo. No incluyas títulos de escena, solo el texto narrado. No uses comillas."
+        "2. Contexto. 3. Desarrollo. 4. Clímax. 5. Cierre (conecte con el inicio para crear un loop). "
+        "Tono dramático. No incluyas títulos de escena, solo el texto narrado. No uses comillas."
     )
 
-    print("[EDITORIAL] Solicitando historia a Groq...")
     texto_ia = generar_con_groq(prompt)
     
+    escenas = None
     if texto_ia:
-        guion = estructurar_guion(texto_ia, "El misterio de la desaparición")
-        if guion: return guion
+        escenas = estructurar_guion(texto_ia, f"Historia de {genero_elegido}")
     
-    print("[EDITORIAL] Groq falló. Usando historia de respaldo.")
-    return {
-        "titulo": "El secreto de la habitación 404", "formato": "vertical", "duracion": 60,
-        "escenas": [
+    # Si falla Groq, usamos el respaldo pero manteniendo la originalidad visual
+    if not escenas:
+        print("[EDITORIAL] Groq falló. Usando historia de respaldo.")
+        escenas = [
             {"numero": 1, "duracion": 8, "tipo": "gancho", "titulo": "El inicio", "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista. Eso le pasó a un huésped."},
             {"numero": 2, "duracion": 12, "tipo": "contexto", "titulo": "El contexto", "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos. Le dijo que no hiciera ruido después de medianoche."},
             {"numero": 3, "duracion": 15, "tipo": "desarrollo", "titulo": "El conflicto", "narracion": "Al abrir la puerta, la habitación no tenía muebles. Solo había un espejo gigante que reflejaba un cuarto diferente."},
             {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio. Del otro lado, alguien igual a él lo esperaba con una sonrisa."},
             {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?"}
         ]
+
+    # Guardamos los metadatos de originalidad en el JSON para que el renderizador los use
+    return {
+        "titulo": f"El misterio de {genero_elegido.lower()}",
+        "formato": "vertical",
+        "duracion": 60,
+        "estilo_visual": estilo_elegido,
+        "voz": voz_elegida,
+        "escenas": escenas
     }
 
 def guardar_guion():
@@ -96,7 +130,10 @@ def guardar_guion():
     with open(ARCHIVO_GUION, "w", encoding="utf-8") as f:
         json.dump(guion, f, ensure_ascii=False, indent=4)
     print("=" * 50)
+    print(f"GUION GUARDADO CON ÉXITO")
     print(f"TÍTULO: {guion['titulo']}")
-    print(f"ESCENA 1: {guion['escenas'][0]['narracion']}")
     print("=" * 50)
     return guion
+
+if __name__ == "__main__":
+    guardar_guion()
