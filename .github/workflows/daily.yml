@@ -1,16 +1,14 @@
 name: FORTALEZA MEDIA AI
-
 on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar en YouTube al terminar (true/false)'
+        description: 'Publicar en YouTube (true/false)'
         required: false
         default: false
         type: boolean
   schedule:
-    # 15:00 UTC = 9:00 AM en San Luis Potosí (UTC-6)
-    - cron: '0 15 * * *'
+    - cron: '0 15 * * *' # 9:00 AM CDMX
 
 permissions:
   contents: write
@@ -19,131 +17,72 @@ jobs:
   producir:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-
     steps:
-      - name: Descargar proyecto
-        uses: actions/checkout@v4
-
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Generar video (Motor IA Total)
+          
+      - name: Generar video (Ecosistema Completo)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+          MAGIC_HOUR_API_KEY: ${{ secrets.MAGIC_HOUR_API_KEY }}
+          JSON2VIDEO_API_KEY: ${{ secrets.JSON2VIDEO_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
-      - name: Guardar Memoria Evolutiva e Historial
+      - name: Guardar memoria
         if: always()
         continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          if [ -f historial_temas.json ]; then
-            git add historial_temas.json
-          fi
-          
-          if [ -f config_edicion.json ]; then
-            git add config_edicion.json
-          fi
-          
-          if git diff --cached --quiet; then
-            echo "Sin cambios en la memoria del sistema."
-            exit 0
-          fi
-          
-          git commit -m "Auto-mejora: Actualizar cerebro evolutivo e historial [skip ci]"
+          [ -f historial_temas.json ] && git add historial_temas.json
+          [ -f config_edicion.json ] && git add config_edicion.json
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Auto-mejora [skip ci]"
           git push
 
-      - name: Preparar título y descripción
+      - name: Preparar metadatos
         run: |
           python - <<'PY'
-          import json
-          import os
-
-          with open("guion.json", encoding="utf-8") as f:
-              guion = json.load(f)
-
-          titulo = " ".join(guion["titulo"].split())[:100]
-
-          narracion = " ".join(
-              escena["narracion"] for escena in guion["escenas"]
-          )
-
-          hashtags = " #Shorts #Curiosidades #Misterios #DatosCuriosos"
-
-          descripcion = (
-              " ".join(narracion.split())
-              + hashtags
-          )[:5000]
-
-          delimiter = "FORTALEZA_" + str(os.getpid())
-
+          import json, os
+          with open("guion.json", encoding="utf-8") as f: g = json.load(f)
+          titulo = " ".join(g["titulo"].split())[:100]
+          desc = " ".join(e["narracion"] for e in g["escenas"])[:5000] + " #Shorts #Viral"
+          delim = "FORTALEZA_" + str(os.getpid())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"VIDEO_TITLE<<{delimiter}\n{titulo}\n{delimiter}\n")
-              f.write(f"VIDEO_DESCRIPTION<<{delimiter}\n{descripcion}\n{delimiter}\n")
+              f.write(f"VIDEO_TITLE<<{delim}\n{titulo}\n{delim}\n")
+              f.write(f"VIDEO_DESCRIPTION<<{delim}\n{desc}\n{delim}\n")
           PY
 
-      - name: Guardar copia del video
+      - name: Subir artefacto
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
           path: |
             output/fortaleza_final.mp4
             output/fortaleza_short.mp4
-            output/reporte_edicion.json
           retention-days: 7
-          if-no-files-found: warn
 
-      - name: Publicar automáticamente en YouTube
-        if: |
-          github.event_name == 'schedule' ||
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.publicar == 'true')
+      - name: Publicar en YouTube
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publicar == 'true')
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
           VIDEO_DESCRIPTION: ${{ env.VIDEO_DESCRIPTION }}
         run: |
           set -e
-
-          if [ -s output/fortaleza_short.mp4 ]; then
-            VIDEO="output/fortaleza_short.mp4"
-          elif [ -s output/fortaleza_final.mp4 ]; then
-            VIDEO="output/fortaleza_final.mp4"
-          else
-            echo "ERROR: No se encontró ningún video final."
-            exit 1
-          fi
-
-          echo "Video a publicar: $VIDEO"
-
-          if [ -z "$FORTALEZA_UPLOAD_KEY" ]; then
-            echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
-            exit 1
-          fi
-
+          VIDEO=$( [ -s output/fortaleza_short.mp4 ] && echo "output/fortaleza_short.mp4" || echo "output/fortaleza_final.mp4" )
+          [ -z "$FORTALEZA_UPLOAD_KEY" ] && echo "Falta FORTALEZA_UPLOAD_KEY" && exit 1
           SIZE=$(stat -c%s "$VIDEO")
-
-          if [ "$SIZE" -gt 94371840 ]; then
-            echo "ERROR: El video supera el límite de 90 MB."
-            exit 1
-          fi
-
-          curl --silent --show-error --fail-with-body \
-            --max-time 1800 \
-            -X POST \
-            "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
-            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
-            -H "Content-Type: video/mp4" \
-            -H "X-Video-Title: ${VIDEO_TITLE}" \
-            -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+          [ "$SIZE" -gt 94371840 ] && echo "Video > 90MB" && exit 1
+          curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
+            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
+            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
             --data-binary "@${VIDEO}"
-
-          echo "Proceso de publicación finalizado."
