@@ -4,11 +4,14 @@ import html
 import json
 import math
 import os
+import random
 import re
 import subprocess
 import wave
+
 from array import array
 from io import BytesIO
+from pathlib import Path
 
 import requests
 import edge_tts
@@ -23,23 +26,27 @@ from PIL import (
     ImageOps
 )
 
-# ==========================================
-# FORTALEZA MEDIA AI 3.0
-# MOTOR CINEMATOGRAFICO AUTOMATICO
-# ==========================================
+
+# ==========================================================
+# FORTALEZA MEDIA AI 4.0
+# MOTOR VISUAL CINEMATOGRÁFICO
+# ==========================================================
 
 ANCHO = 1080
 ALTO = 1920
 FPS = 30
 
 VOZ = "es-MX-DaliaNeural"
-VELOCIDAD_VOZ = "+3%"
+VELOCIDAD_VOZ = "+5%"
 
-OUTPUT = "output"
-RECURSOS = "output/recursos"
+OUTPUT = Path("output")
+RECURSOS = OUTPUT / "recursos"
 
-IMAGENES_POR_ESCENA = 3
+IMAGENES_POR_ESCENA = 4
 MAX_ESCENAS = 12
+
+CALIDAD = "medium"
+CRF = "21"
 
 PALETAS = [
     ("#071426", "#123D60", "#39B8D8"),
@@ -47,7 +54,7 @@ PALETAS = [
     ("#111B18", "#245B43", "#65D6A0"),
     ("#29100D", "#74301F", "#FFAD64"),
     ("#10152C", "#293D75", "#82A7FF"),
-    ("#25152B", "#63344E", "#FF83AE")
+    ("#25152B", "#63344E", "#FF83AE"),
 ]
 
 STOPWORDS = {
@@ -59,14 +66,25 @@ STOPWORDS = {
     "muchos", "hacia", "después", "durante",
     "ser", "son", "del", "las", "los", "una",
     "uno", "unos", "unas", "con", "sin", "por",
-    "que", "sus", "sus", "hay", "más", "muy",
-    "hoy", "sobre", "nuestro", "nuestra"
+    "que", "sus", "hay", "más", "muy", "hoy",
+    "nuestro", "nuestra", "existe", "llamado",
+    "llamada", "parte", "conoce", "conocen",
+}
+
+CABECERAS = {
+    "User-Agent": "FORTALEZA-MEDIA-AI/4.0 (video production)",
 }
 
 
-# ==========================================
+# ==========================================================
 # UTILIDADES
-# ==========================================
+# ==========================================================
+
+def preparar_carpetas():
+
+    OUTPUT.mkdir(exist_ok=True)
+    RECURSOS.mkdir(exist_ok=True)
+
 
 def fuente(tamano, negrita=False):
 
@@ -77,7 +95,7 @@ def fuente(tamano, negrita=False):
 
         "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"
         if negrita else
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
     ]
 
     for ruta in rutas:
@@ -85,16 +103,6 @@ def fuente(tamano, negrita=False):
             return ImageFont.truetype(ruta, tamano)
 
     return ImageFont.load_default()
-
-
-def color_rgb(color):
-
-    color = color.lstrip("#")
-
-    return tuple(
-        int(color[i:i + 2], 16)
-        for i in (0, 2, 4)
-    )
 
 
 def ejecutar(comando):
@@ -106,17 +114,15 @@ def ejecutar(comando):
     )
 
     if resultado.returncode != 0:
-
         raise RuntimeError(
-            "ERROR DE FFmpeg:\n"
-            + resultado.stderr[-4000:]
+            "ERROR FFmpeg:\n" + resultado.stderr[-5000:]
         )
 
 
 def duracion_audio(ffmpeg, archivo):
 
     resultado = subprocess.run(
-        [ffmpeg, "-i", archivo],
+        [ffmpeg, "-i", str(archivo)],
         capture_output=True,
         text=True
     )
@@ -140,17 +146,17 @@ def duracion_audio(ffmpeg, archivo):
     )
 
 
-# ==========================================
-# BUSQUEDA AUTOMATICA DE FOTOGRAFIAS
-# WIKIMEDIA COMMONS
-# ==========================================
-
 def limpiar_html(texto):
 
     texto = re.sub(r"<[^>]+>", "", str(texto))
 
     return html.unescape(texto).strip()
 
+
+# ==========================================================
+# BÚSQUEDA DE IMÁGENES REALES
+# WIKIMEDIA COMMONS
+# ==========================================================
 
 def crear_busqueda(titulo, narracion):
 
@@ -159,14 +165,13 @@ def crear_busqueda(titulo, narracion):
         titulo + " " + narracion
     )
 
-    palabras = [
-        palabra for palabra in palabras
-        if palabra.lower() not in STOPWORDS
-    ]
-
     resultado = []
 
     for palabra in palabras:
+
+        if palabra.lower() in STOPWORDS:
+            continue
+
         if palabra.lower() not in [
             x.lower() for x in resultado
         ]:
@@ -177,37 +182,29 @@ def crear_busqueda(titulo, narracion):
 
 def buscar_fotografias(titulo, narracion, numero):
 
-    os.makedirs(RECURSOS, exist_ok=True)
-
     consulta = crear_busqueda(titulo, narracion)
 
-    print("Buscando imágenes:", consulta)
-
-    url_api = "https://commons.wikimedia.org/w/api.php"
+    print("[VISUAL] Buscando:", consulta)
 
     parametros = {
         "action": "query",
         "generator": "search",
         "gsrsearch": consulta,
         "gsrnamespace": 6,
-        "gsrlimit": 12,
+        "gsrlimit": 20,
         "prop": "imageinfo",
         "iiprop": "url|extmetadata",
         "iiurlwidth": 1600,
-        "format": "json"
-    }
-
-    encabezados = {
-        "User-Agent": "FortalezaMediaAI/3.0 (video production)"
+        "format": "json",
     }
 
     try:
 
         respuesta = requests.get(
-            url_api,
+            "https://commons.wikimedia.org/w/api.php",
             params=parametros,
-            headers=encabezados,
-            timeout=30
+            headers=CABECERAS,
+            timeout=25
         )
 
         respuesta.raise_for_status()
@@ -218,11 +215,12 @@ def buscar_fotografias(titulo, narracion, numero):
 
     except Exception as error:
 
-        print("No fue posible buscar imágenes:", error)
+        print("[VISUAL] Error de búsqueda:", error)
 
         return []
 
     resultados = []
+    urls_vistas = set()
 
     for pagina in paginas.values():
 
@@ -243,15 +241,17 @@ def buscar_fotografias(titulo, narracion, numero):
             or info.get("url")
         )
 
-        if not imagen_url:
+        if not imagen_url or imagen_url in urls_vistas:
             continue
+
+        urls_vistas.add(imagen_url)
 
         try:
 
             descarga = requests.get(
                 imagen_url,
-                headers=encabezados,
-                timeout=35
+                headers=CABECERAS,
+                timeout=30
             )
 
             descarga.raise_for_status()
@@ -260,30 +260,32 @@ def buscar_fotografias(titulo, narracion, numero):
                 BytesIO(descarga.content)
             ).convert("RGB")
 
-            if imagen.width < 500 or imagen.height < 400:
+            if imagen.width < 500 or imagen.height < 350:
                 continue
 
-            ruta = (
-                f"{RECURSOS}/escena_{numero:02d}_"
+            ruta = RECURSOS / (
+                f"escena_{numero:02d}_"
                 f"{len(resultados):02d}.jpg"
             )
 
             imagen.save(
                 ruta,
                 "JPEG",
-                quality=91
+                quality=92
             )
 
             metadatos = info.get("extmetadata", {})
 
             autor = limpiar_html(
-                metadatos.get("Artist", {}).get("value", "Autor no indicado")
+                metadatos.get(
+                    "Artist", {}
+                ).get("value", "Autor no indicado")
             )
 
             licencia = limpiar_html(
-                metadatos.get("LicenseShortName", {}).get(
-                    "value", "Licencia no indicada"
-                )
+                metadatos.get(
+                    "LicenseShortName", {}
+                ).get("value", "Consultar licencia")
             )
 
             pagina_url = info.get(
@@ -291,27 +293,40 @@ def buscar_fotografias(titulo, narracion, numero):
             )
 
             resultados.append({
-                "archivo": ruta,
+                "archivo": str(ruta),
                 "autor": autor,
                 "licencia": licencia,
-                "url": pagina_url
+                "url": pagina_url,
             })
 
-            print("Fotografía descargada:", len(resultados))
+            print(
+                "[VISUAL] Imagen descargada:",
+                len(resultados)
+            )
 
             if len(resultados) >= IMAGENES_POR_ESCENA:
                 break
 
         except Exception as error:
 
-            print("Imagen omitida:", error)
+            print("[VISUAL] Imagen omitida:", error)
 
     return resultados
 
 
-# ==========================================
-# FONDOS Y DISEÑO VISUAL
-# ==========================================
+# ==========================================================
+# FONDOS CINEMATOGRÁFICOS
+# ==========================================================
+
+def color_rgb(color):
+
+    color = color.lstrip("#")
+
+    return tuple(
+        int(color[i:i + 2], 16)
+        for i in (0, 2, 4)
+    )
+
 
 def crear_fondo(numero):
 
@@ -333,12 +348,12 @@ def crear_fondo(numero):
 
     rgb = color_rgb(acento)
 
-    for i in range(10):
+    for i in range(12):
 
-        radio = 100 + i * 75
+        radio = 100 + i * 85
 
         x = 800 - (numero * 95) % 350
-        y = 250 + i * 175
+        y = 250 + i * 145
 
         dibujo.ellipse(
             (
@@ -347,7 +362,7 @@ def crear_fondo(numero):
                 x + radio,
                 y + radio
             ),
-            outline=(*rgb, max(12, 65 - i * 5)),
+            outline=(*rgb, max(12, 65 - i * 4)),
             width=4
         )
 
@@ -365,37 +380,75 @@ def preparar_fotografia(ruta, numero):
         centering=(0.5, 0.5)
     )
 
-    imagen = ImageEnhance.Color(imagen).enhance(1.18)
+    imagen = ImageEnhance.Color(imagen).enhance(1.25)
+    imagen = ImageEnhance.Contrast(imagen).enhance(1.15)
+    imagen = ImageEnhance.Brightness(imagen).enhance(0.78)
 
-    imagen = ImageEnhance.Contrast(imagen).enhance(1.12)
-
-    imagen = ImageEnhance.Brightness(imagen).enhance(0.72)
-
-    # Oscurecer bordes para mejorar la lectura
-    capa = Image.new(
-        "RGBA",
+    # Viñeta suave para mejorar el contraste.
+    mascara = Image.new(
+        "L",
         (ANCHO, ALTO),
-        (0, 0, 0, 0)
+        0
     )
 
-    dibujo = ImageDraw.Draw(capa)
+    dibujo = ImageDraw.Draw(mascara)
 
-    dibujo.rectangle(
-        (0, 0, ANCHO, 400),
-        fill=(0, 0, 0, 85)
+    dibujo.ellipse(
+        (-250, -200, ANCHO + 250, ALTO + 200),
+        fill=255
     )
 
-    dibujo.rectangle(
-        (0, 1250, ANCHO, ALTO),
-        fill=(0, 0, 0, 115)
+    mascara = mascara.filter(
+        ImageFilter.GaussianBlur(120)
     )
 
-    imagen = Image.alpha_composite(
-        imagen.convert("RGBA"),
-        capa
-    ).convert("RGB")
+    sombra = Image.new(
+        "RGB",
+        (ANCHO, ALTO),
+        (0, 0, 0)
+    )
+
+    imagen = Image.composite(
+        imagen,
+        sombra,
+        mascara
+    )
 
     return imagen
+
+
+# ==========================================================
+# DISEÑO DE ESCENAS Y TÍTULOS
+# ==========================================================
+
+def dividir_lineas(dibujo, texto, font, ancho):
+
+    lineas = []
+    actual = ""
+
+    for palabra in texto.split():
+
+        prueba = (actual + " " + palabra).strip()
+
+        if dibujo.textbbox(
+            (0, 0),
+            prueba,
+            font=font
+        )[2] <= ancho:
+
+            actual = prueba
+
+        else:
+
+            if actual:
+                lineas.append(actual)
+
+            actual = palabra
+
+    if actual:
+        lineas.append(actual)
+
+    return lineas
 
 
 def crear_escena(titulo, numero, total, fotografia=None):
@@ -415,84 +468,65 @@ def crear_escena(titulo, numero, total, fotografia=None):
 
     acento = PALETAS[numero % len(PALETAS)][2]
 
-    # Marca
+    # Marca de agua.
     dibujo.text(
-        (70, 105),
+        (65, 90),
         "FORTALEZA MEDIA AI",
-        font=fuente(29, True),
-        fill="white"
+        font=fuente(30, True),
+        fill="white",
+        stroke_width=1,
+        stroke_fill="#000000"
     )
 
     dibujo.rounded_rectangle(
-        (70, 155, 300, 165),
+        (65, 145, 315, 156),
         radius=5,
         fill=acento
     )
 
-    # Título inicial
-    if numero == 0:
-
-        palabras = titulo.upper().split()
-
-        lineas = []
-        actual = ""
-
-        for palabra in palabras:
-
-            prueba = (actual + " " + palabra).strip()
-
-            if dibujo.textbbox(
-                (0, 0),
-                prueba,
-                font=fuente(75, True)
-            )[2] < 900:
-
-                actual = prueba
-
-            else:
-
-                if actual:
-                    lineas.append(actual)
-
-                actual = palabra
-
-        if actual:
-            lineas.append(actual)
-
-        dibujo.multiline_text(
-            (ANCHO // 2, 330),
-            "\n".join(lineas),
-            font=fuente(75, True),
-            fill="white",
-            anchor="mm",
-            align="center",
-            spacing=22,
-            stroke_width=3,
-            stroke_fill="#000000"
-        )
-
-    # Indicador de escenas
     dibujo.text(
-        (ANCHO - 75, 105),
+        (ANCHO - 65, 90),
         f"{numero + 1:02d}/{total:02d}",
         font=fuente(30, True),
         fill=acento,
         anchor="ra"
     )
 
-    ruta = f"{OUTPUT}/visual_{numero:02d}.png"
+    if numero == 0:
 
-    imagen.save(
-        ruta,
-        quality=95
-    )
+        titulo_visual = titulo.upper()
 
-    return ruta
+        font = fuente(78, True)
+
+        lineas = dividir_lineas(
+            dibujo,
+            titulo_visual,
+            font,
+            930
+        )[:3]
+
+        dibujo.multiline_text(
+            (ANCHO // 2, 350),
+            "\n".join(lineas),
+            font=font,
+            fill="white",
+            anchor="mm",
+            align="center",
+            spacing=24,
+            stroke_width=4,
+            stroke_fill="#000000"
+        )
+
+    ruta = OUTPUT / f"visual_{numero:02d}.png"
+
+    imagen.save(ruta)
+
+    return str(ruta)
 
 
-# ==========================================
-# VOZ Y SINCRONIZACION DE PALABRAS
-# ==========================================
+# ==========================================================
+# VOZ Y SINCRONIZACIÓN
+# ==========================================================
 
 async def crear_voz(texto, ruta):
 
@@ -521,11 +555,13 @@ async def crear_voz(texto, ruta):
             palabras.append({
                 "texto": fragmento["text"],
                 "inicio": inicio,
-                "fin": inicio + duracion
+                "fin": inicio + duracion,
             })
 
     if not audio:
-        raise RuntimeError("No se recibió audio de la voz.")
+        raise RuntimeError(
+            "No se recibió audio de la voz."
+        )
 
     with open(ruta, "wb") as archivo:
         archivo.write(audio)
@@ -533,15 +569,15 @@ async def crear_voz(texto, ruta):
     return palabras
 
 
-# ==========================================
-# SUBTITULOS ANIMADOS POR FRASES
-# ==========================================
+# ==========================================================
+# SUBTÍTULOS DINÁMICOS
+# ==========================================================
 
 def crear_imagen_subtitulo(palabras, numero, acento):
 
     imagen = Image.new(
         "RGBA",
-        (ANCHO, 430),
+        (ANCHO, 400),
         (0, 0, 0, 0)
     )
 
@@ -552,98 +588,66 @@ def crear_imagen_subtitulo(palabras, numero, acento):
         for palabra in palabras
     )
 
-    font = fuente(55, True)
+    font = fuente(53, True)
 
-    # Fondo redondeado
     dibujo.rounded_rectangle(
-        (45, 65, 1035, 365),
+        (40, 45, 1040, 350),
         radius=38,
-        fill=(0, 0, 0, 175),
-        outline=(*color_rgb(acento), 230),
+        fill=(0, 0, 0, 195),
+        outline=(*color_rgb(acento), 240),
         width=4
     )
 
-    # Distribución en líneas
-    palabras_texto = frase.split()
+    lineas = dividir_lineas(
+        dibujo,
+        frase,
+        font,
+        880
+    )[:3]
 
-    lineas = []
-    actual = ""
+    alto = len(lineas) * 75
 
-    for palabra in palabras_texto:
-
-        prueba = (actual + " " + palabra).strip()
-
-        if dibujo.textbbox(
-            (0, 0),
-            prueba,
-            font=font
-        )[2] <= 880:
-
-            actual = prueba
-
-        else:
-
-            if actual:
-                lineas.append(actual)
-
-            actual = palabra
-
-    if actual:
-        lineas.append(actual)
-
-    lineas = lineas[:3]
-
-    alto = len(lineas) * 72
-
-    y = 215 - alto // 2
+    y = 195 - alto // 2
 
     for indice, linea in enumerate(lineas):
 
         dibujo.text(
-            (ANCHO // 2, y + indice * 78),
+            (ANCHO // 2, y + indice * 80),
             linea,
             font=font,
             fill="white",
             anchor="mm",
-            stroke_width=2,
+            stroke_width=3,
             stroke_fill="#000000"
         )
 
-    # Barra decorativa
     dibujo.rounded_rectangle(
-        (390, 385, 690, 395),
+        (390, 370, 690, 380),
         radius=5,
         fill=acento
     )
 
-    ruta = (
-        f"{OUTPUT}/caption_{numero:03d}.png"
-    )
+    ruta = OUTPUT / f"caption_{numero:04d}.png"
 
     imagen.save(ruta)
 
-    return ruta
+    return str(ruta)
 
 
 def crear_subtitulos(palabras, duracion, numero, acento):
 
-    if not palabras:
-
-        return []
-
     grupos = []
-
     grupo = []
 
     for palabra in palabras:
 
         grupo.append(palabra)
 
-        texto_actual = " ".join(
+        texto = " ".join(
             p["texto"] for p in grupo
         )
 
-        if len(grupo) >= 5 or len(texto_actual) >= 29:
+        if len(grupo) >= 5 or len(texto) >= 30:
 
             grupos.append(grupo)
             grupo = []
@@ -662,7 +666,7 @@ def crear_subtitulos(palabras, duracion, numero, acento):
 
         fin = min(
             duracion,
-            grupo[-1]["fin"] + 0.12
+            grupo[-1]["fin"] + 0.15
         )
 
         if fin <= inicio:
@@ -677,55 +681,54 @@ def crear_subtitulos(palabras, duracion, numero, acento):
         resultado.append({
             "archivo": archivo,
             "inicio": inicio,
-            "fin": fin
+            "fin": fin,
         })
 
     return resultado
 
 
-# ==========================================
-# ANIMACION DE FOTOGRAFIAS
-# ==========================================
+# ==========================================================
+# MOVIMIENTO DE CÁMARA
+# ==========================================================
 
-def crear_toma(
-    ffmpeg,
-    imagen,
-    destino,
-    duracion,
-    numero
-):
+def crear_toma(ffmpeg, imagen, destino, duracion, numero):
 
-    # Movimientos diferentes para cada toma
-    if numero % 4 == 0:
+    movimientos = [
+        (
+            "min(zoom+0.0010,1.20)",
+            "iw/2-(iw/zoom/2)",
+            "ih/2-(ih/zoom/2)"
+        ),
+        (
+            "min(zoom+0.0012,1.22)",
+            "iw/2-(iw/zoom/2)+on*0.12",
+            "ih/2-(ih/zoom/2)"
+        ),
+        (
+            "min(zoom+0.0010,1.18)",
+            "iw/2-(iw/zoom/2)",
+            "ih/2-(ih/zoom/2)+on*0.10"
+        ),
+        (
+            "max(zoom-0.0007,1.0)",
+            "iw/2-(iw/zoom/2)-on*0.08",
+            "ih/2-(ih/zoom/2)"
+        ),
+    ]
 
-        x = "iw/2-(iw/zoom/2)"
-        y = "ih/2-(ih/zoom/2)"
-
-    elif numero % 4 == 1:
-
-        x = "iw/2-(iw/zoom/2)+on*0.12"
-        y = "ih/2-(ih/zoom/2)"
-
-    elif numero % 4 == 2:
-
-        x = "iw/2-(iw/zoom/2)"
-        y = "ih/2-(ih/zoom/2)+on*0.10"
-
-    else:
-
-        x = "iw/2-(iw/zoom/2)-on*0.10"
-        y = "ih/2-(ih/zoom/2)"
+    zoom, x, y = movimientos[numero % len(movimientos)]
 
     filtro = (
-        "scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,"
+        "scale=1200:2134:force_original_aspect_ratio=increase,"
+        "crop=1200:2134,"
         "zoompan="
-        "z='min(zoom+0.0008,1.15)':"
+        f"z='{zoom}':"
         f"x='{x}':"
         f"y='{y}':"
         "d=1:"
         "s=1080x1920:"
         "fps=30,"
+        "setsar=1,"
         "format=yuv420p"
     )
 
@@ -740,22 +743,21 @@ def crear_toma(
         "-an",
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "21",
+        "-crf", CRF,
         "-pix_fmt", "yuv420p",
         destino
     ])
 
 
-# ==========================================
-# MUSICA AMBIENTAL ORIGINAL
-# ==========================================
+# ==========================================================
+# MÚSICA AMBIENTAL ORIGINAL
+# ==========================================================
 
-def crear_musica():
+def crear_musica(duracion=180):
 
-    ruta = f"{OUTPUT}/musica_ambiente.wav"
+    ruta = OUTPUT / "musica_ambiente.wav"
 
-    frecuencia = 44100
-    duracion = 120
+    frecuencia = 22050
 
     datos = array("h")
 
@@ -764,8 +766,8 @@ def crear_musica():
         t = i / frecuencia
 
         modulacion = (
-            0.65
-            + 0.35 * math.sin(
+            0.60
+            + 0.40 * math.sin(
                 2 * math.pi * 0.035 * t
             )
         )
@@ -783,57 +785,60 @@ def crear_musica():
         datos.append(valor)
         datos.append(valor)
 
-    with wave.open(ruta, "wb") as archivo:
+    with wave.open(str(ruta), "wb") as archivo:
 
         archivo.setnchannels(2)
         archivo.setsampwidth(2)
         archivo.setframerate(frecuencia)
         archivo.writeframes(datos.tobytes())
 
-    return ruta
+    return str(ruta)
 
 
-# ==========================================
-# CREDITOS DE IMAGENES
-# ==========================================
+# ==========================================================
+# CRÉDITOS VISUALES
+# ==========================================================
 
 def guardar_creditos(fuentes):
 
-    ruta = f"{OUTPUT}/creditos_imagenes.txt"
+    ruta = OUTPUT / "creditos_imagenes.txt"
 
-    with open(ruta, "w", encoding="utf-8") as archivo:
+    with open(
+        ruta,
+        "w",
+        encoding="utf-8"
+    ) as archivo:
 
         archivo.write(
             "FUENTES VISUALES - FORTALEZA MEDIA AI\n\n"
         )
 
-        for fuente_imagen in fuentes:
+        for elemento in fuentes:
 
             archivo.write(
-                f"Autor: {fuente_imagen['autor']}\n"
+                f"Autor: {elemento['autor']}\n"
             )
 
             archivo.write(
-                f"Licencia: {fuente_imagen['licencia']}\n"
+                f"Licencia: {elemento['licencia']}\n"
             )
 
             archivo.write(
-                f"Fuente: {fuente_imagen['url']}\n\n"
+                f"Fuente: {elemento['url']}\n\n"
             )
 
-    return ruta
+    return str(ruta)
 
 
-# ==========================================
-# PRODUCCION PRINCIPAL
-# ==========================================
+# ==========================================================
+# PRODUCCIÓN PRINCIPAL
+# ==========================================================
 
 async def crear_video():
 
-    os.makedirs(OUTPUT, exist_ok=True)
-    os.makedirs(RECURSOS, exist_ok=True)
+    preparar_carpetas()
 
-    if not os.path.exists("guion.json"):
+    if not Path("guion.json").exists():
 
         raise FileNotFoundError(
             "No se encontró guion.json"
@@ -862,9 +867,8 @@ async def crear_video():
     ][:MAX_ESCENAS]
 
     if not escenas:
-
         raise ValueError(
-            "El guion no contiene narración."
+            "El guion no contiene narraciones."
         )
 
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -872,10 +876,14 @@ async def crear_video():
     clips = []
     todas_las_fuentes = []
 
-    print("=" * 45)
-    print("FORTALEZA MEDIA AI 3.0")
-    print("INICIANDO PRODUCCION CINEMATOGRAFICA")
-    print("=" * 45)
+    print("=" * 55)
+    print("FORTALEZA MEDIA AI 4.0")
+    print("MOTOR CINEMATOGRÁFICO")
+    print("=" * 55)
+
+    # ------------------------------------------------------
+    # PRODUCCIÓN DE CADA ESCENA
+    # ------------------------------------------------------
 
     for numero, escena in enumerate(escenas):
 
@@ -884,10 +892,11 @@ async def crear_video():
         ).strip()
 
         print(
-            f"\nESCENA {numero + 1}/{len(escenas)}"
+            f"\n[PRODUCCIÓN] Escena "
+            f"{numero + 1}/{len(escenas)}"
         )
 
-        # Buscar fotografías reales
+        # 1. Buscar imágenes.
         fotografias = buscar_fotografias(
             titulo,
             narracion,
@@ -896,51 +905,57 @@ async def crear_video():
 
         todas_las_fuentes.extend(fotografias)
 
-        # Crear respaldo visual si no hay fotografías
-        if not fotografias:
-
-            imagen = crear_escena(
-                titulo,
-                numero,
-                len(escenas)
-            )
-
-            fotografias_archivos = [imagen]
-
-        else:
-
-            fotografias_archivos = [
-                foto["archivo"]
-                for foto in fotografias
-            ]
-
-            imagen = crear_escena(
-                titulo,
-                numero,
-                len(escenas),
-                fotografias_archivos[0]
-            )
-
-            fotografias_archivos[0] = imagen
-
-        # Crear voz y obtener tiempos reales de palabras
-        audio = f"{OUTPUT}/voz_{numero:02d}.mp3"
+        # 2. Generar narración.
+        audio = OUTPUT / f"voz_{numero:02d}.mp3"
 
         palabras = await crear_voz(
             narracion,
-            audio
+            str(audio)
         )
 
         duracion = duracion_audio(
             ffmpeg,
-            audio
+            str(audio)
         )
 
+        if duracion <= 0:
+            raise RuntimeError(
+                "La narración tiene duración inválida."
+            )
+
+        # 3. Preparar visuales.
+        if fotografias:
+
+            imagenes = [
+                foto["archivo"]
+                for foto in fotografias
+            ]
+
+        else:
+
+            imagenes = [
+                str(
+                    crear_fondo(numero).save(
+                        RECURSOS / f"respaldo_{numero:02d}.jpg"
+                    ) or RECURSOS / f"respaldo_{numero:02d}.jpg"
+                )
+            ]
+
+        # Diseñar una portada visual.
+        imagen_portada = crear_escena(
+            titulo,
+            numero,
+            len(escenas),
+            imagenes[0]
+        )
+
+        imagenes[0] = imagen_portada
+
+        # 4. Subtítulos sincronizados.
         acento = PALETAS[
             numero % len(PALETAS)
         ][2]
 
-        # Crear subtítulos sincronizados
         subtitulos = crear_subtitulos(
             palabras,
             duracion,
@@ -948,36 +963,30 @@ async def crear_video():
             acento
         )
 
-        # Distribuir fotografías durante la narración
-        cantidad = len(fotografias_archivos)
-
-        duracion_toma = duracion / cantidad
+        # 5. Dividir el tiempo entre las fotografías.
+        duracion_toma = duracion / len(imagenes)
 
         tomas = []
 
-        for indice, fotografia in enumerate(
-            fotografias_archivos
-        ):
+        for indice, imagen in enumerate(imagenes):
 
             clip_toma = (
-                f"{OUTPUT}/toma_{numero:02d}_"
-                f"{indice:02d}.mp4"
+                OUTPUT
+                / f"toma_{numero:02d}_{indice:02d}.mp4"
             )
 
             crear_toma(
                 ffmpeg,
-                fotografia,
-                clip_toma,
+                imagen,
+                str(clip_toma),
                 duracion_toma,
                 numero + indice
             )
 
-            tomas.append(clip_toma)
+            tomas.append(str(clip_toma))
 
-        # Unir las tomas visuales de esta escena
-        lista_tomas = (
-            f"{OUTPUT}/lista_tomas_{numero:02d}.txt"
-        )
+        # 6. Unir las tomas visuales.
+        lista_tomas = OUTPUT / f"lista_tomas_{numero:02d}.txt"
 
         with open(
             lista_tomas,
@@ -988,29 +997,27 @@ async def crear_video():
             for toma in tomas:
 
                 archivo.write(
-                    f"file '{os.path.basename(toma)}'\n"
+                    f"file '{Path(toma).name}'\n"
                 )
 
-        video_visual = (
-            f"{OUTPUT}/visual_final_{numero:02d}.mp4"
-        )
+        video_visual = OUTPUT / f"visual_final_{numero:02d}.mp4"
 
         ejecutar([
             ffmpeg,
             "-y",
             "-f", "concat",
             "-safe", "0",
-            "-i", lista_tomas,
+            "-i", str(lista_tomas),
             "-c", "copy",
-            video_visual
+            str(video_visual)
         ])
 
-        # Construir superposiciones de subtítulos
+        # 7. Añadir subtítulos.
         comando = [
             ffmpeg,
             "-y",
-            "-i", video_visual,
-            "-i", audio
+            "-i", str(video_visual),
+            "-i", str(audio)
         ]
 
         for subtitulo in subtitulos:
@@ -1022,7 +1029,6 @@ async def crear_video():
             ])
 
         filtros = []
-
         actual = "[0:v]"
 
         for indice, subtitulo in enumerate(subtitulos):
@@ -1030,13 +1036,10 @@ async def crear_video():
             entrada = indice + 2
             salida = f"[v{indice + 1}]"
 
-            inicio = subtitulo["inicio"]
-            fin = subtitulo["fin"]
-
             filtros.append(
                 f"{actual}[{entrada}:v]"
                 "overlay=0:1320:"
-                f"enable='between(t\\,{inicio:.3f}\\,{fin:.3f})'"
+                f"enable='between(t\\,{subtitulo['inicio']:.3f}\\,{subtitulo['fin']:.3f})'"
                 f"{salida}"
             )
 
@@ -1051,9 +1054,7 @@ async def crear_video():
             filtro_final = "[0:v]null[vfinal]"
             actual = "[vfinal]"
 
-        clip_final = (
-            f"{OUTPUT}/escena_final_{numero:02d}.mp4"
-        )
+        clip_final = OUTPUT / f"escena_final_{numero:02d}.mp4"
 
         comando.extend([
             "-filter_complex",
@@ -1062,29 +1063,35 @@ async def crear_video():
             "-map", "1:a",
             "-c:v", "libx264",
             "-preset", "ultrafast",
-            "-crf", "21",
+            "-crf", CRF,
             "-pix_fmt", "yuv420p",
+            "-r", str(FPS),
             "-c:a", "aac",
             "-b:a", "160k",
             "-shortest",
             "-movflags", "+faststart",
-            clip_final
+            str(clip_final)
         ])
 
         ejecutar(comando)
 
-        clips.append(clip_final)
+        clips.append(str(clip_final))
 
-    # ======================================
-    # UNION FINAL
-    # ======================================
+        print(
+            f"[PRODUCCIÓN] Escena terminada: "
+            f"{duracion:.1f} segundos"
+        )
 
-    print("\nUniendo escenas...")
+    # ------------------------------------------------------
+    # UNIÓN FINAL
+    # ------------------------------------------------------
 
-    lista = f"{OUTPUT}/lista_final.txt"
+    print("\n[FINAL] Uniendo escenas...")
+
+    lista_final = OUTPUT / "lista_final.txt"
 
     with open(
-        lista,
+        lista_final,
         "w",
         encoding="utf-8"
     ) as archivo:
@@ -1092,32 +1099,37 @@ async def crear_video():
         for clip in clips:
 
             archivo.write(
-                f"file '{os.path.basename(clip)}'\n"
+                f"file '{Path(clip).name}'\n"
             )
 
-    video_base = f"{OUTPUT}/video_base.mp4"
+    video_base = OUTPUT / "video_base.mp4"
 
     ejecutar([
         ffmpeg,
         "-y",
         "-f", "concat",
         "-safe", "0",
-        "-i", lista,
+        "-i", str(lista_final),
         "-c", "copy",
-        video_base
+        str(video_base)
     ])
 
-    # Música ambiental
+    # ------------------------------------------------------
+    # MÚSICA Y MEZCLA
+    # ------------------------------------------------------
+
+    print("[FINAL] Mezclando música y narración...")
+
     musica = crear_musica()
 
-    destino = f"{OUTPUT}/fortaleza_short.mp4"
+    destino = OUTPUT / "fortaleza_short.mp4"
 
     ejecutar([
         ffmpeg,
         "-y",
         "-stream_loop", "-1",
         "-i", musica,
-        "-i", video_base,
+        "-i", str(video_base),
         "-filter_complex",
         (
             "[0:a]volume=0.10[musica];"
@@ -1133,24 +1145,26 @@ async def crear_video():
         "-b:a", "192k",
         "-shortest",
         "-movflags", "+faststart",
-        destino
+        str(destino)
     ])
 
-    # Créditos
+    # ------------------------------------------------------
+    # CRÉDITOS Y DESCRIPCIÓN
+    # ------------------------------------------------------
+
     guardar_creditos(todas_las_fuentes)
 
-    # Incorporar créditos a la descripción de YouTube
+    creditos = "\n\nFUENTES VISUALES:\n"
+
+    for elemento in todas_las_fuentes:
+
+        creditos += (
+            f"{elemento['autor']} | "
+            f"{elemento['licencia']} | "
+            f"{elemento['url']}\n"
+        )
+
     if todas_las_fuentes:
-
-        creditos = "\n\nFUENTES DE IMAGENES:\n"
-
-        for fuente_imagen in todas_las_fuentes:
-
-            creditos += (
-                f"{fuente_imagen['autor']} | "
-                f"{fuente_imagen['licencia']} | "
-                f"{fuente_imagen['url']}\n"
-            )
 
         guion["descripcion"] = (
             guion.get("descripcion", "")
@@ -1170,32 +1184,54 @@ async def crear_video():
                 indent=4
             )
 
-    # Verificación final
-    if not os.path.exists(destino):
+    # ------------------------------------------------------
+    # VALIDACIÓN FINAL
+    # ------------------------------------------------------
+
+    if not destino.exists():
 
         raise FileNotFoundError(
             "No se generó el video final."
         )
 
-    tamano = os.path.getsize(destino)
+    tamano = destino.stat().st_size
 
-    if tamano == 0:
+    if tamano <= 0:
 
         raise RuntimeError(
             "El video final está vacío."
         )
 
-    print("\n" + "=" * 45)
-    print("PRODUCCION FINALIZADA")
-    print("Archivo:", destino)
-    print(
-        "Tamaño:",
-        round(tamano / 1048576, 2),
-        "MB"
-    )
-    print("Fotografías:", len(todas_las_fuentes))
-    print("=" * 45)
+    if tamano > 90 * 1024 * 1024:
 
+        raise RuntimeError(
+            "El video supera el límite de 90 MB."
+        )
+
+    with destino.open("rb") as archivo:
+
+        cabecera = archivo.read(16)
+
+    if b"ftyp" not in cabecera:
+
+        raise RuntimeError(
+            "El archivo final no tiene una cabecera MP4 válida."
+        )
+
+    print("\n" + "=" * 55)
+    print("FORTALEZA MEDIA AI 4.0")
+    print("PRODUCCIÓN FINALIZADA")
+    print("=" * 55)
+    print("Archivo:", destino)
+    print("Tamaño:", round(tamano / 1048576, 2), "MB")
+    print("Fotografías:", len(todas_las_fuentes))
+    print("Escenas:", len(escenas))
+    print("=" * 55)
+
+
+# ==========================================================
+# EJECUCIÓN DIRECTA
+# ==========================================================
 
 if __name__ == "__main__":
 
