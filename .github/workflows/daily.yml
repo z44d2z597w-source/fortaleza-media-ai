@@ -35,14 +35,15 @@ jobs:
           with open("guion.json", encoding="utf-8") as f:
               guion = json.load(f)
 
-          titulo = guion["titulo"][:100]
+          titulo = " ".join(guion["titulo"].split())[:100]
+
           narracion = " ".join(
               escena["narracion"] for escena in guion["escenas"]
           )
 
           descripcion = (
-              narracion
-              + "\n\n#Shorts #Curiosidades #Misterios"
+              " ".join(narracion.split())
+              + " #Shorts #Curiosidades #Misterios"
           )[:5000]
 
           delimiter = "FORTALEZA_" + str(os.getpid())
