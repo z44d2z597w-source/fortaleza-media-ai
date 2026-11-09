@@ -18,14 +18,10 @@ import edge_tts
 import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# ==========================================================
-# FORTALEZA MEDIA AI 37.0 — MOTOR DE VIDEO LARGO (YOUTUBE)
-# ==========================================================
-
 FPS = 30
 OUTPUT = Path("output")
 RECURSOS = OUTPUT / "recursos_long"
-FORMATO = {"ancho": 1080, "alto": 1920} # Mantenemos vertical por si acaso, o 16:9 si prefieres
+FORMATO = {"ancho": 1080, "alto": 1920}
 
 def preparar_entorno():
     OUTPUT.mkdir(exist_ok=True)
@@ -48,8 +44,7 @@ def obtener_duracion(ffmpeg, archivo):
     if not m: raise RuntimeError(f"Error de duración: {archivo}")
     h, mi, s = m.groups(); return int(h)*3600 + int(mi)*60 + float(s)
 
-def obtener_video_fondo():
-    # Buscamos un video de fondo largo o gameplay
+def obtener_video_fondo(ffmpeg):
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if pixabay_key:
         try:
@@ -72,7 +67,7 @@ def obtener_video_fondo():
     ruta = RECURSOS / "fondo_emergencia.jpg"
     img.save(ruta)
     video_path = RECURSOS / "fondo_largo.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loop", "1", "-i", str(ruta), "-c:v", "libx264", "-t", "3600", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_path)], check=True, capture_output=True)
+    subprocess.run([ffmpeg, "-y", "-loop", "1", "-i", str(ruta), "-c:v", "libx264", "-t", "3600", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_path)], check=True, capture_output=True)
     return str(video_path)
 
 async def generar_voz(texto, ruta, voz_elegida):
@@ -131,8 +126,8 @@ async def crear_long():
         print("[ERROR] No hay guion_largo.")
         return None
 
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    video_fondo = obtener_video_fondo()
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe() # <--- AQUÍ OBTENEMOS LA RUTA CORRECTA
+    video_fondo = obtener_video_fondo(ffmpeg)
     clips_capitulos = []
 
     print(f"--- GENERANDO VIDEO LARGO: {guion['titulo']} ---")
@@ -141,15 +136,12 @@ async def crear_long():
         print(f"\n[CAPÍTULO {idx+1}/{len(capitulos)}] {cap['titulo_capitulo']}")
         narracion = cap["narracion"]
         
-        # 1. Audio del Capítulo
         ruta_voz = RECURSOS / f"voz_cap_{idx}.mp3"
         marcas = await generar_voz(narracion, ruta_voz, voz)
         dur_voz = obtener_duracion(ffmpeg, ruta_voz)
         
-        # 2. Subtítulos
         subtitulos = crear_subtitulos(marcas, dur_voz, idx)
         
-        # 3. Componer Capítulo
         cmd_comp = [ffmpeg, "-y", "-stream_loop", "-1", "-i", video_fondo, "-i", str(ruta_voz)]
         for sub in subtitulos: cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
         
@@ -171,7 +163,6 @@ async def crear_long():
         clips_capitulos.append(str(ruta_cap))
         print(f"  -> Capítulo {idx+1} renderizado ({dur_voz/60:.1f} min).")
 
-    # 4. Unir todos los capítulos
     print("\n[UNIENDO CAPÍTULOS]...")
     destino = OUTPUT / "fortaleza_largo.mp4"
     with open(OUTPUT / "lista_largo.txt", "w") as f:
