@@ -180,3 +180,4 @@ export default {
     return reply("Ruta no encontrada.", 404);
   }
 };
+
