@@ -1,3 +1,4 @@
+
 name: FORTALEZA MEDIA AI
 
 on:
@@ -8,6 +9,7 @@ on:
 jobs:
   producir:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Descargar proyecto
@@ -24,9 +26,74 @@ jobs:
       - name: Generar video
         run: python main.py
 
-      - name: Guardar video
+      - name: Preparar título y descripción
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          with open("guion.json", encoding="utf-8") as f:
+              guion = json.load(f)
+
+          titulo = guion["titulo"][:100]
+          narracion = " ".join(
+              escena["narracion"] for escena in guion["escenas"]
+          )
+
+          descripcion = (
+              narracion
+              + "\n\n#Shorts #Curiosidades #Misterios"
+          )[:5000]
+
+          delimiter = "FORTALEZA_" + str(os.getpid())
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"VIDEO_TITLE<<{delimiter}\n{titulo}\n{delimiter}\n")
+              f.write(f"VIDEO_DESCRIPTION<<{delimiter}\n{descripcion}\n{delimiter}\n")
+          PY
+
+      - name: Guardar copia del video
         uses: actions/upload-artifact@v4
         with:
           name: FORTALEZA-MEDIA-VIDEO
           path: output/fortaleza_short.mp4
           retention-days: 7
+
+      - name: Publicar automáticamente en YouTube
+        env:
+          FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
+          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
+          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESCRIPTION }}
+        run: |
+          set -e
+
+          VIDEO="output/fortaleza_short.mp4"
+
+          if [ ! -s "$VIDEO" ]; then
+            echo "ERROR: No se encontró el video."
+            exit 1
+          fi
+
+          if [ -z "$FORTALEZA_UPLOAD_KEY" ]; then
+            echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
+            exit 1
+          fi
+
+          SIZE=$(stat -c%s "$VIDEO")
+
+          if [ "$SIZE" -gt 94371840 ]; then
+            echo "ERROR: El video supera el límite de 90 MB."
+            exit 1
+          fi
+
+          curl --silent --show-error --fail-with-body \
+            --max-time 1800 \
+            -X POST \
+            "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
+            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" \
+            -H "Content-Type: video/mp4" \
+            -H "X-Video-Title: ${VIDEO_TITLE}" \
+            -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
+            --data-binary "@${VIDEO}"
+
+          echo "Proceso de publicación finalizado."
