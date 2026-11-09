@@ -23,7 +23,6 @@ def guardar_historial(historial):
         json.dump(historial, f, ensure_ascii=False, indent=4)
 
 def generar_con_groq(prompt):
-    """Conecta con Groq para generar texto de alta calidad."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         print("[GROQ] No hay GROQ_API_KEY configurada. Saltando...")
@@ -39,7 +38,6 @@ def generar_con_groq(prompt):
         "temperature": 0.7,
         "max_tokens": 800
     }
-    
     try:
         respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
         respuesta.raise_for_status()
@@ -50,7 +48,6 @@ def generar_con_groq(prompt):
         return None
 
 def generar_con_pollinations(prompt):
-    """Respaldo usando Pollinations (texto)."""
     prompt_encoded = urllib.parse.quote(prompt)
     url = f"https://text.pollinations.ai/{prompt_encoded}?model=openai"
     try:
@@ -63,12 +60,9 @@ def generar_con_pollinations(prompt):
         return None
 
 def estructurar_guion(texto_ia, titulo):
-    """Divide el texto de la IA en 5 escenas perfectas."""
     texto_ia = re.sub(r"^(Escena \d+:?|Aquí tienes.*?:)", "", texto_ia, flags=re.IGNORECASE|re.MULTILINE).strip()
     oraciones = [o.strip() for o in re.split(r"(?<=[.!?])\s+", texto_ia) if len(o.strip()) > 10]
-    
-    if len(oraciones) < 5:
-        return None
+    if len(oraciones) < 5: return None
 
     quinto = max(1, len(oraciones) // 5)
     escenas = [
@@ -78,18 +72,10 @@ def estructurar_guion(texto_ia, titulo):
         {"numero": 4, "duracion": 15, "tipo": "climax", "titulo": "La revelación", "narracion": " ".join(oraciones[quinto*3:quinto*4])},
         {"numero": 5, "duracion": 10, "tipo": "cierre", "titulo": "El loop", "narracion": " ".join(oraciones[quinto*4:])}
     ]
-    
     for i in range(1, 5):
-        if not escenas[i]["narracion"]:
-            escenas[i]["narracion"] = escenas[i-1]["narracion"]
+        if not escenas[i]["narracion"]: escenas[i]["narracion"] = escenas[i-1]["narracion"]
 
-    return {
-        "titulo": titulo,
-        "formato": "vertical",
-        "formato_legible": "YouTube Shorts (Estructurado)",
-        "duracion": 60,
-        "escenas": escenas
-    }
+    return {"titulo": titulo, "formato": "vertical", "formato_legible": "YouTube Shorts (Estructurado)", "duracion": 60, "escenas": escenas}
 
 def crear_guion():
     prompt_base = (
@@ -103,21 +89,13 @@ def crear_guion():
         "Usa un tono dramático y directo. No incluyas títulos de escena, solo el texto narrado. No uses comillas."
     )
 
-    temas_drama = [
-        "una traición familiar", "un secreto de pareja", "un misterio en el trabajo",
-        "una desaparición inexplicable", "una herencia maldita", "un mensaje de texto escalofriante"
-    ]
+    temas_drama = ["una traición familiar", "un secreto de pareja", "un misterio en el trabajo", "una desaparición inexplicable", "una herencia maldita", "un mensaje de texto escalofriante"]
     random.shuffle(temas_drama)
 
     for tema in temas_drama:
         print(f"[EDITORIAL] Generando historia sobre: {tema}")
         prompt = prompt_base.format(tema=tema)
-        
-        # Intentar Groq, luego Pollinations
-        texto_ia = generar_con_groq(prompt)
-        if not texto_ia:
-            texto_ia = generar_con_pollinations(prompt)
-        
+        texto_ia = generar_con_groq(prompt) or generar_con_pollinations(prompt)
         if texto_ia:
             guion = estructurar_guion(texto_ia, f"El misterio de {tema}")
             if guion: return guion
