@@ -3,11 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar en YouTube (true/false)'
+        description: 'Publicar en Redes (true/false)'
         required: false
         default: false
         type: boolean
   schedule:
+    # 15:00 UTC = 9:00 AM CDMX (San Luis Potosí)
     - cron: '0 15 * * *'
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      - name: Generar Videos
+      - name: Generar Videos (Short y Largo)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
@@ -36,7 +37,7 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
-      - name: Guardar memoria
+      - name: Guardar memoria creativa
         if: always()
         continue-on-error: true
         run: |
