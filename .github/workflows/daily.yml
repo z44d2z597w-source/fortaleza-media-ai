@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar en Redes (true/false)'
+        description: 'Publicar en YouTube (true/false)'
         required: false
         default: false
         type: boolean
@@ -16,7 +16,7 @@ permissions:
 jobs:
   producir:
     runs-on: ubuntu-latest
-    timeout-minutes: 360 # Aumentado a 6 horas por si el video largo tarda mucho
+    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v4
@@ -49,18 +49,16 @@ jobs:
           git commit -m "Auto-mejora: Historial actualizado [skip ci]"
           git push
 
-      - name: Preparar metadatos para publicación
+      - name: Preparar metadatos
         run: |
           python - <<'PY'
           import json, os
           with open("guion.json", encoding="utf-8") as f: g = json.load(f)
           
           titulo_largo = " ".join(g["titulo"].split())[:100]
-          # Para el video largo, unimos la narración de todos los capítulos
           texto_largo = " ".join(cap["narracion"] for cap in g["guion_largo"])
           desc_largo = texto_largo[:4000] + " #Documental #Historia #Misterio"
           
-          # Para el short, usamos el título y el gancho
           titulo_short = titulo_largo + " #Shorts"
           desc_short = g["gancho_corto"] + " #Shorts #Viral #TikTok"
           
@@ -72,10 +70,10 @@ jobs:
               f.write(f"VIDEO_DESC_SHORT<<{delim}\n{desc_short}\n{delim}\n")
           PY
 
-      - name: Subir artefactos (Videos)
+      - name: Subir artefactos (Videos listos para TikTok)
         uses: actions/upload-artifact@v4
         with:
-          name: FORTALEZA-MEDIA-VIDEOS
+          name: VIDEOS-PARA-REDES
           path: |
             output/fortaleza_short.mp4
             output/fortaleza_largo.mp4
@@ -94,8 +92,6 @@ jobs:
           set -e
           VIDEO="output/fortaleza_largo.mp4"
           if [ ! -s "$VIDEO" ]; then echo "No hay video largo, saltando."; exit 0; fi
-          SIZE=$(stat -c%s "$VIDEO")
-          if [ "$SIZE" -gt 94371840 ]; then echo "Video > 90MB, comprimiendo..."; fi # Aquí podrías añadir compresión si es necesario
           curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
             -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
             -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
@@ -118,20 +114,3 @@ jobs:
             -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
             -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
             --data-binary "@${VIDEO}"
-
-      # (Opcional) Publicar en TikTok si tienes la API de Upload-Post
-      - name: Publicar en TikTok
-        if: |
-          github.event_name == 'schedule' || 
-          github.event.inputs.publicar == 'true' || 
-          github.event.inputs.publicar == true
-        env:
-          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
-          VIDEO_TITLE: ${{ env.VIDEO_TITLE_SHORT }}
-          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC_SHORT }}
-        run: |
-          if [ -n "$UPLOAD_POST_API_KEY" ]; then
-            python upload_tiktok.py
-          else
-            echo "Saltando TikTok (No hay clave configurada)."
-          fi
