@@ -7,129 +7,115 @@ import os
 from pathlib import Path
 
 ARCHIVO_GUION = Path("guion.json")
-GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana", "Conspiración tecnológica"]
+ARCHIVO_HISTORIAL = Path("historial_creativo.json")
+
+# --- COMBINADOR ALEATORIO (Para que NUNCA se repita si la IA falla) ---
+PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada", "un hacker adolescente", "un policía corrupto", "un médico del turno nocturno"]
+ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor", "una casa inteligente", "un laboratorio subterráneo", "una biblioteca antigua", "un crucero en el medio del océano"]
+OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "un teléfono que solo recibe llamadas", "una llave que no abre nada", "un diario con páginas en blanco", "una muñeca rota", "una grabación de voz"]
+
+GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana"]
 VOCES = ["es-MX-DaliaNeural", "es-MX-JorgeNeural"]
 
-# Lista de modelos en orden de preferencia (por si uno falla)
-MODELOS_GROQ = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-70b-versatile",
-    "llama3-70b-8192",
-    "mixtral-8x7b-32768",
-    "llama-3.1-8b-instant"
-]
+def cargar_historial():
+    if ARCHIVO_HISTORIAL.exists():
+        try:
+            with open(ARCHIVO_HISTORIAL, "r", encoding="utf-8") as f: return json.load(f)
+        except: return []
+    return []
+
+def guardar_historial(titulo):
+    historial = cargar_historial()
+    historial.append(titulo)
+    with open(ARCHIVO_HISTORIAL, "w", encoding="utf-8") as f:
+        json.dump(historial[-30:], f, ensure_ascii=False, indent=4)
 
 def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key: 
-        print("[GROQ] No hay clave configurada.")
-        return None
-    
+    if not api_key: return None
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
-    
-    for modelo in MODELOS_GROQ:
-        payload = {
-            "model": modelo,
-            "messages": [
-                {"role": "system", "content": "Eres un director de cine de élite. Creas storyboards con coherencia visual absoluta."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.8,
-            "response_format": {"type": "json_object"}
-        }
-        
+    for modelo in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+        payload = {"model": modelo, "messages": [{"role": "system", "content": "Eres un director de cine de élite. Creas guiones estructurados."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
         try:
-            print(f"[GROQ] Intentando con modelo: {modelo}")
-            respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
-            if respuesta.status_code == 200:
-                print(f"[GROQ] ¡Éxito con {modelo}!")
-                return json.loads(respuesta.json()["choices"][0]["message"]["content"])
-            else:
-                print(f"[GROQ] {modelo} falló con status {respuesta.status_code}")
-        except Exception as e:
-            print(f"[GROQ] Error con {modelo}: {e}")
-            continue
-    
-    print("[GROQ] Todos los modelos fallaron.")
+            resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
+            if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
+        except: pass
+    return None
+
+def generar_con_pollinations(prompt):
+    try:
+        url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt)}?model=openai&json=true"
+        resp = requests.get(url, timeout=90)
+        if resp.status_code == 200: return json.loads(resp.text)
+    except: pass
     return None
 
 def crear_plan_de_produccion():
     genero = random.choice(GENEROS)
     voz = random.choice(VOCES)
-    print(f"[DIRECTOR] Creando obra maestra: {genero} | Voz: {voz}")
+    historial = cargar_historial()
+    temas_prohibidos = ", ".join(historial) if historial else "Ninguno"
 
+    # Prompt Maestro para que genere Video Largo + 3 Shorts
     prompt = f"""
-    Actúa como un director de cine. Crea un plan de producción para un video vertical (9:16) del género '{genero}'.
+    Actúa como un director de cine. Crea una historia del género '{genero}'.
+    NO USES estos temas anteriores: {temas_prohibidos}.
     
-    REGLAS DE COHERENCIA ESTRICTA:
-    1. Define un PERSONAJE PRINCIPAL con características físicas inmutables.
-    2. Define un ESCENARIO PRINCIPAL inmutable.
-    3. Genera un STORYBOARD de 6 a 8 beats. Cada 'prompt_visual' DEBE repetir EXACTAMENTE la descripción del personaje y el escenario.
-    4. El primer beat DEBE ser un gancho visual que detenga el scroll (Hook de 1-2 segundos).
-
-    DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON CON ESTA ESTRUCTURA:
+    DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
     {{
-        "titulo": "Título atractivo y único",
-        "personaje": "Descripción física detallada y fija.",
-        "escenario": "Descripción del lugar y la iluminación.",
-        "gancho_corto": "Texto de 100-150 palabras para TikTok/Shorts. Debe ser intrigante.",
-        "storyboard": [
+        "titulo": "Título impactante",
+        "guion_largo": "Historia completa de 3000 palabras dividida en 5 capítulos.",
+        "shorts": [
             {{
-                "id": 1,
-                "duracion": 4,
-                "narracion": "Texto exacto de la voz en off.",
-                "prompt_visual": "Prompt en inglés. DEBE incluir la descripción del personaje y el escenario."
+                "parte": 1,
+                "gancho": "Texto de 40 segundos que enganche y diga 'Parte 1'."
+            }},
+            {{
+                "parte": 2,
+                "gancho": "Texto de 40 segundos que enganche y diga 'Parte 2'."
+            }},
+            {{
+                "parte": 3,
+                "gancho": "Texto de 40 segundos que diga 'Parte 3' y llame a ver el video completo."
             }}
         ]
     }}
     """
 
-    plan = generar_con_groq(prompt)
-    
-    if not plan or "storyboard" not in plan:
-        print("[AVISO] Groq falló. Usando plan de respaldo coherente.")
+    plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
+
+    # --- PLAN DE RESPALDO ANTI-REPETICIÓN ---
+    if not plan or "shorts" not in plan:
+        print("[AVISO] IAs fallaron. Generando historia única con Combinador Aleatorio.")
+        p = random.choice(PERSONAJES)
+        e = random.choice(ESCENARIOS)
+        o = random.choice(OBJETOS)
+        
+        titulo = f"El secreto de {o} en {e}"
         plan = {
-            "titulo": "El Enigma de la Estación Abandonada",
-            "personaje": "un detective cansado, abrigo marrón, sombrero de fieltro",
-            "escenario": "una estación de tren abandonada, niebla densa, luces tenues",
-            "gancho_corto": "Los relojes de esta estación no han funcionado en 40 años. Pero hoy, uno de ellos se movió. El detective a cargo descubrió que no era una coincidencia, sino una trampa. ¿Quién está jugando con el tiempo? Descubre la verdad completa en el video largo.",
-            "storyboard": [
-                {"id": 1, "duracion": 4, "narracion": "Los relojes de esta estación no han funcionado en 40 años.", "prompt_visual": "Cinematic 8k, vertical 9:16, a tired detective in a brown coat and fedora, standing in an abandoned train station, thick fog, broken clocks, slow pan."},
-                {"id": 2, "duracion": 4, "narracion": "Pero hoy, uno de ellos se movió.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of the detective's face, looking at a clock that is ticking, dust in the air."},
-                {"id": 3, "duracion": 4, "narracion": "Y el mensaje que dejó no era para él.", "prompt_visual": "Cinematic 8k, vertical 9:16, the detective's hand holding a mysterious note, blurry background of the station."},
-                {"id": 4, "duracion": 4, "narracion": "Alguien más está jugando con el tiempo.", "prompt_visual": "Cinematic 8k, vertical 9:16, the detective looking at a shadowy figure disappearing into the fog."},
-                {"id": 5, "duracion": 4, "narracion": "Y esta vez, el reloj corre en su contra.", "prompt_visual": "Cinematic 8k, vertical 9:16, the detective running through the abandoned station, clock hands spinning rapidly."},
-                {"id": 6, "duracion": 4, "narracion": "¿Quién está jugando con el tiempo?", "prompt_visual": "Cinematic 8k, vertical 9:16, the detective looking directly at the camera, dramatic lighting."}
+            "titulo": titulo,
+            "guion_largo": f"{p.capitalize()} entró a {e} y encontró {o}. A partir de ese momento, nada volvió a ser igual. La historia completa te dejará sin aliento.",
+            "shorts": [
+                {"parte": 1, "gancho": f"Parte 1: {p.capitalize()} estaba en {e}. Encontró {o}. Pero había un problema..."},
+                {"parte": 2, "gancho": f"Parte 2: Lo que {p} descubrió sobre {o} cambió las reglas. Nada era lo que parecía."},
+                {"parte": 3, "gancho": f"Parte 3: El final de esta historia te dejará helado. Mira el video completo en mi canal."}
             ]
         }
 
-    # Guardar historial
-    historial_path = Path("historial_creativo.json")
-    historial = []
-    if historial_path.exists():
-        try:
-            with open(historial_path, "r") as f: historial = json.load(f)
-        except: pass
-    historial.append(plan["titulo"])
-    with open(historial_path, "w") as f: json.dump(historial[-20:], f, indent=4)
+    guardar_historial(plan["titulo"])
 
     return {
         "titulo": plan["titulo"],
-        "formato": "vertical",
         "voz": voz,
-        "gancho_corto": plan["gancho_corto"],
-        "director_notes": {
-            "personaje": plan.get("personaje", "personaje principal"),
-            "escenario": plan.get("escenario", "escenario principal"),
-            "storyboard": plan["storyboard"]
-        }
+        "guion_largo": [{"narracion": plan["guion_largo"]}], # Lo dividimos internamente en render_long
+        "shorts": plan["shorts"]
     }
 
 def guardar_guion():
     guion = crear_plan_de_produccion()
     with open(ARCHIVO_GUION, "w", encoding="utf-8") as f:
         json.dump(guion, f, ensure_ascii=False, indent=4)
-    print(f"PLAN DE PRODUCCIÓN GUARDADO: {guion['titulo']}")
+    print(f"GUION INFINITO GUARDADO: {guion['titulo']}")
 
 if __name__ == "__main__":
     guardar_guion()
