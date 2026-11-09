@@ -19,14 +19,13 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================================
-# FORTALEZA MEDIA AI 22.1 — AUDIO BLINDADO Y VIDEO IA
+# FORTALEZA MEDIA AI 22.2 — MOTOR INDESTRUCTIBLE
 # ==========================================================
 
 FPS = 30
 OUTPUT = Path("output")
 RECURSOS = OUTPUT / "recursos"
 MAX_ESCENAS = 20
-
 CONFIG_DEFECTO = {"corte_min": 1.5, "corte_max": 3.5}
 
 def preparar_carpetas():
@@ -83,18 +82,16 @@ def calcular_cortes(palabras, duracion_total):
     else: resultado[-1] = duracion_total
     return resultado
 
-# --- GENERADORES DE VIDEO IA ---
-
 def generar_video_agnes(prompt, duracion):
     api_key = os.environ.get("AGNES_API_KEY")
     if not api_key: return None
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"model": "agnes-video-v2.0", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
+    # (Código de Agnes se mantiene igual, resumido por espacio)
     try:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": "agnes-video-v2.0", "prompt": prompt, "duration": min(5, int(duracion)+1), "aspect_ratio": "9:16"}
         resp = requests.post("https://apihub.agnes-ai.cn/v1/video/generations", headers=headers, json=payload, timeout=60)
         task_id = resp.json().get("id") or resp.json().get("task_id")
         if not task_id: return None
-        
         for _ in range(60):
             time.sleep(10)
             poll = requests.get(f"https://apihub.agnes-ai.cn/v1/video/generations/{task_id}", headers=headers).json()
@@ -106,19 +103,16 @@ def generar_video_agnes(prompt, duracion):
                         r.raise_for_status()
                         with open(ruta, "wb") as f:
                             for chunk in r.iter_content(8192): f.write(chunk)
-                    print("[AGNES] Video descargado con éxito.")
                     return str(ruta)
             elif poll.get("status") == "failed": return None
-    except Exception as e:
-        print(f"[AGNES] Error: {e}")
-        return None
+    except Exception: return None
 
 def generar_video_magichour(prompt, duracion):
     api_key = os.environ.get("MAGIC_HOUR_API_KEY")
     if not api_key: return None
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
     try:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"prompt": prompt, "model": "wan-2.2", "duration_seconds": min(5, int(duracion)+1), "resolution": "480p", "aspect_ratio": "9:16"}
         resp = requests.post("https://api.magichour.ai/v1/text-to-video", headers=headers, json=payload, timeout=60)
         resp.raise_for_status()
         video_url = resp.json().get("video_url")
@@ -128,33 +122,33 @@ def generar_video_magichour(prompt, duracion):
                 r.raise_for_status()
                 with open(ruta, "wb") as f:
                     for chunk in r.iter_content(8192): f.write(chunk)
-            print("[MAGIC HOUR] Video descargado con éxito.")
             return str(ruta)
-    except Exception as e:
-        print(f"[MAGIC HOUR] Error: {e}")
-        return None
+    except Exception: return None
 
 def generar_imagen_pollinations(prompt, num_escena, num_toma, formato):
+    """Descarga imagen y VERIFICA que no sea un archivo corrupto."""
     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width={formato['ancho']}&height={formato['alto']}&nologo=true&model=flux"
     try:
         resp = requests.get(url, timeout=60)
+        resp.raise_for_status()
+        
+        # VALIDACIÓN CRÍTICA: Si no es una imagen, lanzará error aquí
+        img = Image.open(BytesIO(resp.content))
+        img.verify()
+        
         ruta = RECURSOS / f"ia_{num_escena:02d}_{num_toma:02d}.jpg"
         with open(ruta, "wb") as f: f.write(resp.content)
-        Image.open(ruta).verify()
-        print("[POLLINATIONS] Imagen de respaldo generada.")
+        print("[POLLINATIONS] Imagen válida generada.")
         return str(ruta)
     except Exception as e:
-        print(f"[POLLINATIONS] Error: {e}")
+        print(f"[POLLINATIONS] Falló o imagen corrupta: {e}")
         return None
 
-# --- AUDIO BLINDADO ---
 async def generar_voz_con_respaldo(texto, ruta, voz_elegida):
-    # Intentará con la voz elegida, si falla usará Dalia, y si no, Jorge.
     voces_a_probar = [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]
-    
     for voz in voces_a_probar:
         try:
-            print(f"[VOZ] Intentando generar audio con: {voz}")
+            print(f"[VOZ] Intentando: {voz}")
             tts = edge_tts.Communicate(texto, voice=voz, rate="+8%")
             audio, marcas = bytearray(), []
             async for f in tts.stream():
@@ -162,20 +156,13 @@ async def generar_voz_con_respaldo(texto, ruta, voz_elegida):
                 elif f["type"] == "WordBoundary":
                     inicio = f["offset"] / 10000000
                     marcas.append({"texto": f["text"], "inicio": inicio, "fin": inicio + (f["duration"] / 10000000)})
-            
-            # Si se generó audio mayor a 1 segundo, es exitoso
             if len(audio) > 1000:
                 with open(ruta, "wb") as f: f.write(audio)
-                print(f"[VOZ] ¡Éxito con {voz}!")
+                print(f"[VOZ] Éxito con {voz}")
                 return marcas
-            else:
-                print(f"[VOZ] {voz} no devolvió audio válido. Probando siguiente...")
         except Exception as e:
-            print(f"[VOZ] Error con {voz}: {e}. Probando siguiente...")
-            
-    raise RuntimeError("Ninguna voz de Edge TTS funcionó. Revisar conexión.")
-
-# --- GRÁFICOS Y MEZCLA ---
+            print(f"[VOZ] Error con {voz}: {e}")
+    raise RuntimeError("Ninguna voz funcionó.")
 
 def generar_whoosh(ruta):
     frec, dur = 44100, 0.4
@@ -217,7 +204,6 @@ def crear_scroll_stopper(formato):
 
 def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_video):
     ancho, alto = formato["ancho"], formato["alto"]
-    
     if es_video:
         filtros = [f"scale={ancho}:{alto}:force_original_aspect_ratio=increase", f"crop={ancho}:{alto}", "setsar=1", "format=yuv420p"]
         cmd = [ffmpeg, "-y", "-stream_loop", "-1", "-i", ruta_recurso, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
@@ -229,16 +215,8 @@ def crear_toma_visual(ffmpeg, ruta_recurso, destino, duracion, idx, formato, es_
         ]
         zoom, x, y = movimientos[idx % len(movimientos)]
         zoompan = f"zoompan=z='{zoom}':x='{x}':y='{y}':d=1:s={ancho}x{alto}:fps={FPS}"
-        
-        filtros = [
-            f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase",
-            f"crop={int(ancho*1.2)}:{int(alto*1.2)}",
-            zoompan,
-            "eq=contrast=1.15:saturation=1.25",
-            "setsar=1", "format=yuv420p"
-        ]
+        filtros = [f"scale={int(ancho*1.2)}:{int(alto*1.2)}:force_original_aspect_ratio=increase", f"crop={int(ancho*1.2)}:{int(alto*1.2)}", zoompan, "eq=contrast=1.15:saturation=1.25", "setsar=1", "format=yuv420p"]
         cmd = [ffmpeg, "-y", "-loop", "1", "-framerate", str(FPS), "-i", ruta_recurso, "-vf", ",".join(filtros), "-t", f"{duracion:.3f}", "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", "-r", str(FPS), str(destino)]
-        
     ejecutar_ffmpeg(cmd)
 
 def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
@@ -253,7 +231,6 @@ def mezcla_final(ffmpeg, video, musica, whooshes, destino, duracion):
     else:
         f_aud += "[base]anull[audio_mixed];"
     f_aud += "[audio_mixed]alimiter=limit=0.95[audio]"
-
     cmd = [ffmpeg, "-y", "-i", video, "-stream_loop", "-1", "-i", musica]
     for w in whooshes: cmd.extend(["-i", w])
     cmd.extend(["-filter_complex", f_vid + ";" + f_aud, "-map", "[vout]", "-map", "[audio]", "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-t", f"{duracion:.3f}", "-movflags", "+faststart", destino])
@@ -266,7 +243,6 @@ async def crear_video():
     titulo = str(guion.get("titulo", "Viral"))
     voz_elegida = str(guion.get("voz", "es-MX-DaliaNeural"))
     estilo_visual = str(guion.get("estilo_visual", "Cinematic 8k"))
-    
     escenas = [e for e in guion.get("escenas", []) if str(e.get("narracion", "")).strip()][:MAX_ESCENAS]
     formato = {"nombre": "vertical", "ancho": 1080, "alto": 1920}
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -276,7 +252,7 @@ async def crear_video():
     scroll = crear_scroll_stopper(formato)
 
     print("============================================================")
-    print(f"FORTALEZA MEDIA AI 22.1 — PRODUCIENDO: {titulo}")
+    print(f"FORTALEZA MEDIA AI 22.2 — PRODUCIENDO: {titulo}")
     print(f"VOZ: {voz_elegida} | ESTILO: {estilo_visual}")
     print("============================================================")
 
@@ -285,7 +261,6 @@ async def crear_video():
         narracion = str(datos["narracion"]).strip()
         ruta_voz = RECURSOS / f"voz_{num_escena:02d}.mp3"
         
-        # LLAMAMOS A LA FUNCIÓN BLINDADA
         marcas = await generar_voz_con_respaldo(narracion, str(ruta_voz), voz_elegida)
         dur_voz = obtener_duracion(ffmpeg, ruta_voz)
         
@@ -304,17 +279,34 @@ async def crear_video():
             es_video = True
             
             if not video_ia:
-                print("[RESPALDO] Agnes falló. Intentando Magic Hour...")
                 video_ia = generar_video_magichour(prompt, dur)
             
             if not video_ia:
-                print("[RESPALDO] Magic Hour falló. Generando imagen...")
                 video_ia = generar_imagen_pollinations(prompt, num_escena, i, formato)
                 es_video = False
                 
+            # RESPALDO FINAL: Si Pollinations falló, creamos un fondo negro seguro
+            if not video_ia:
+                print("[RESPALDO FINAL] Creando fondo negro de emergencia...")
+                ruta_emergencia = RECURSOS / f"fondo_{num_escena:02d}_{i:02d}.jpg"
+                img = Image.new("RGB", (formato["ancho"], formato["alto"]), color=(15, 15, 15))
+                d = ImageDraw.Draw(img)
+                font = obtener_fuente_texto(60)
+                d.text((100, 960), "Generando...", font=font, fill="white")
+                img.save(ruta_emergencia)
+                video_ia = str(ruta_emergencia)
+                es_video = False
+
             if video_ia:
                 crear_toma_visual(ffmpeg, video_ia, ruta_toma, dur, num_escena*10+i, formato, es_video)
                 tomas_mp4.append(str(ruta_toma))
+
+        # Verificación final de seguridad
+        if not tomas_mp4:
+            print("[AVISO CRÍTICO] No se generaron tomas. Creando video en blanco...")
+            ruta_blanco = RECURSOS / f"blanco_{num_escena:02d}.mp4"
+            ejecutar_ffmpeg([ffmpeg, "-f", "lavfi", "-i", f"color=c=black:s={formato['ancho']}x{formato['alto']}:r={FPS}:d={dur_voz}", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", str(ruta_blanco)])
+            tomas_mp4.append(str(ruta_blanco))
 
         ruta_visual = RECURSOS / f"vis_{num_escena:02d}.mp4"
         with open(RECURSOS / f"list_{num_escena:02d}.txt", "w") as f:
