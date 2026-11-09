@@ -23,5 +23,10 @@
         "titulo": "Telescopio espacial James Webb",
         "formato": "vertical",
         "creado": "2026-11-09T10:38:42.134670+00:00"
+    },
+    {
+        "titulo": "Antártida",
+        "formato": "horizontal",
+        "creado": "2026-11-09T10:42:40.340898+00:00"
     }
 ]
