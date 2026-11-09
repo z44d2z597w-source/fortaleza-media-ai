@@ -10,26 +10,48 @@ ARCHIVO_GUION = Path("guion.json")
 GENEROS = ["Terror psicológico", "Misterio histórico", "Ciencia ficción distópica", "Drama familiar", "Leyenda urbana", "Conspiración tecnológica"]
 VOCES = ["es-MX-DaliaNeural", "es-MX-JorgeNeural"]
 
+# Lista de modelos en orden de preferencia (por si uno falla)
+MODELOS_GROQ = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "llama3-70b-8192",
+    "mixtral-8x7b-32768",
+    "llama-3.1-8b-instant"
+]
+
 def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key: return None
-    headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": "Eres un director de cine de élite. Creas storyboards con coherencia visual absoluta y guiones diseñados para maximizar la retención."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.8,
-        "response_format": {"type": "json_object"}
-    }
-    try:
-        respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
-        respuesta.raise_for_status()
-        return json.loads(respuesta.json()["choices"][0]["message"]["content"])
-    except Exception as e:
-        print(f"[GROQ] Error: {e}")
+    if not api_key: 
+        print("[GROQ] No hay clave configurada.")
         return None
+    
+    headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
+    
+    for modelo in MODELOS_GROQ:
+        payload = {
+            "model": modelo,
+            "messages": [
+                {"role": "system", "content": "Eres un director de cine de élite. Creas storyboards con coherencia visual absoluta."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.8,
+            "response_format": {"type": "json_object"}
+        }
+        
+        try:
+            print(f"[GROQ] Intentando con modelo: {modelo}")
+            respuesta = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
+            if respuesta.status_code == 200:
+                print(f"[GROQ] ¡Éxito con {modelo}!")
+                return json.loads(respuesta.json()["choices"][0]["message"]["content"])
+            else:
+                print(f"[GROQ] {modelo} falló con status {respuesta.status_code}")
+        except Exception as e:
+            print(f"[GROQ] Error con {modelo}: {e}")
+            continue
+    
+    print("[GROQ] Todos los modelos fallaron.")
+    return None
 
 def crear_plan_de_produccion():
     genero = random.choice(GENEROS)
@@ -42,7 +64,7 @@ def crear_plan_de_produccion():
     REGLAS DE COHERENCIA ESTRICTA:
     1. Define un PERSONAJE PRINCIPAL con características físicas inmutables.
     2. Define un ESCENARIO PRINCIPAL inmutable.
-    3. Genera un STORYBOARD de 6 a 8 beats. Cada 'prompt_visual' DEBE repetir EXACTAMENTE la descripción del personaje y el escenario. Esto es obligatorio para mantener la consistencia visual.
+    3. Genera un STORYBOARD de 6 a 8 beats. Cada 'prompt_visual' DEBE repetir EXACTAMENTE la descripción del personaje y el escenario.
     4. El primer beat DEBE ser un gancho visual que detenga el scroll (Hook de 1-2 segundos).
 
     DEVUELVE EXCLUSIVAMENTE UN OBJETO JSON CON ESTA ESTRUCTURA:
@@ -50,13 +72,13 @@ def crear_plan_de_produccion():
         "titulo": "Título atractivo y único",
         "personaje": "Descripción física detallada y fija.",
         "escenario": "Descripción del lugar y la iluminación.",
-        "gancho_corto": "Texto de 100-150 palabras para TikTok/Shorts. Debe ser intrigante y terminar con un CTA.",
+        "gancho_corto": "Texto de 100-150 palabras para TikTok/Shorts. Debe ser intrigante.",
         "storyboard": [
             {{
                 "id": 1,
                 "duracion": 4,
                 "narracion": "Texto exacto de la voz en off.",
-                "prompt_visual": "Prompt en inglés. DEBE incluir la descripción del personaje y el escenario. Ej: 'Cinematic 8k, vertical 9:16, a tired detective in a brown coat, standing in an abandoned train station, fog, slow push-in shot.'"
+                "prompt_visual": "Prompt en inglés. DEBE incluir la descripción del personaje y el escenario."
             }}
         ]
     }}
@@ -81,7 +103,7 @@ def crear_plan_de_produccion():
             ]
         }
 
-    # Guardamos el título en el historial para no repetir
+    # Guardar historial
     historial_path = Path("historial_creativo.json")
     historial = []
     if historial_path.exists():
@@ -97,8 +119,8 @@ def crear_plan_de_produccion():
         "voz": voz,
         "gancho_corto": plan["gancho_corto"],
         "director_notes": {
-            "personaje": plan["personaje"],
-            "escenario": plan["escenario"],
+            "personaje": plan.get("personaje", "personaje principal"),
+            "escenario": plan.get("escenario", "escenario principal"),
             "storyboard": plan["storyboard"]
         }
     }
