@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 # ==========================================================
-# FORTALEZA MEDIA AI 32.1 — DIRECTOR DE ESCENA (CORREGIDO)
+# FORTALEZA MEDIA AI 32.2 — DIRECTOR DE ESCENA (MODELO SEGURO)
 # ==========================================================
 
 ARCHIVO_GUION = Path("guion.json")
@@ -22,7 +22,7 @@ def generar_con_groq(prompt):
 
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant", # Modelo ultra rápido y compatible con JSON
         "messages": [
             {"role": "system", "content": "Eres un director de cine de élite. Planificas videos verticales de YouTube Shorts con una coherencia visual impecable."},
             {"role": "user", "content": prompt}
@@ -67,10 +67,10 @@ def crear_plan_de_produccion():
     REGLAS ESTRICTAS:
     1. La narración debe ser dramática y en español mexicano.
     2. Cada 'prompt_visual' DEBE empezar con 'Cinematic 8k, vertical 9:16,'.
-    3. Cada 'prompt_visual' DEBE repetir la descripción del personaje y del escenario para forzar la coherencia.
+    3. Cada 'prompt_visual' DEBE repetir la descripción del personaje y del escenario.
     4. La suma de las duraciones debe ser entre 45 y 60 segundos.
     5. El número de beats (storyboard) debe ser entre 8 y 12.
-    6. El JSON debe ser válido y no contener texto adicional fuera de él.
+    6. El JSON debe ser válido.
     """
 
     plan = generar_con_groq(prompt)
@@ -82,12 +82,12 @@ def crear_plan_de_produccion():
             "personajes": "un hombre joven, chaqueta de cuero negra, mirada nerviosa",
             "escenario": "un pasillo de hotel antiguo, luces parpadeantes, alfombra roja desgastada",
             "storyboard": [
-                {"id": 1, "duracion": 5, "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista.", "prompt_visual": "Cinematic 8k, vertical 9:16, a young man in a black leather jacket, nervous look, walking down an old hotel corridor, flickering lights, worn red carpet, slow tracking shot."},
-                {"id": 2, "duracion": 5, "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of the same young man's face, holding a key, dim lighting, tense atmosphere, shallow depth of field."},
-                {"id": 3, "duracion": 5, "narracion": "Al abrir la puerta, solo había un espejo gigante.", "prompt_visual": "Cinematic 8k, vertical 9:16, the same man opening a door, revealing a room with only a giant mirror, dust particles in the air, dramatic reveal, slow zoom."},
-                {"id": 4, "duracion": 5, "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of the man's hand touching the mirror surface, ripples forming, surreal effect, suspenseful mood."},
-                {"id": 5, "duracion": 5, "narracion": "Del otro lado, alguien igual a él lo esperaba con una sonrisa.", "prompt_visual": "Cinematic 8k, vertical 9:16, the same man looking into the mirror, his reflection smiling back at him, eerie lighting, slow push-in."},
-                {"id": 6, "duracion": 5, "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?", "prompt_visual": "Cinematic 8k, vertical 9:16, the young man in the black leather jacket, standing in the old hotel corridor, looking directly at the camera, dramatic lighting, freeze frame."}
+                {"id": 1, "duracion": 5, "narracion": "Imagina entrar a un hotel y que la habitación 404 no exista.", "prompt_visual": "Cinematic 8k, vertical 9:16, a young man in a black leather jacket, nervous look, walking down an old hotel corridor, flickering lights, worn red carpet."},
+                {"id": 2, "duracion": 5, "narracion": "El recepcionista le dio la llave sin mirarlo a los ojos.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of the same young man's face, holding a key, dim lighting, tense atmosphere."},
+                {"id": 3, "duracion": 5, "narracion": "Al abrir la puerta, solo había un espejo gigante.", "prompt_visual": "Cinematic 8k, vertical 9:16, the same man opening a door, revealing a room with only a giant mirror, dust particles in the air."},
+                {"id": 4, "duracion": 5, "narracion": "Cuando tocó el espejo, su mano atravesó el vidrio.", "prompt_visual": "Cinematic 8k, vertical 9:16, close-up of the man's hand touching the mirror surface, ripples forming."},
+                {"id": 5, "duracion": 5, "narracion": "Del otro lado, alguien igual a él lo esperaba con una sonrisa.", "prompt_visual": "Cinematic 8k, vertical 9:16, the same man looking into the mirror, his reflection smiling back at him."},
+                {"id": 6, "duracion": 5, "narracion": "Y por eso te pregunto: ¿qué harías si entraras a una habitación 404?", "prompt_visual": "Cinematic 8k, vertical 9:16, the young man in the black leather jacket, standing in the old hotel corridor, looking directly at the camera."}
             ]
         }
 
