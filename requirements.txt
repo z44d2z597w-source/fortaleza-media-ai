@@ -1,2 +1,5 @@
 requests
 python-dotenv
+Pillow
+edge-tts
+imageio-ffmpeg
