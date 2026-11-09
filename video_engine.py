@@ -1,143 +1,641 @@
 
 import json
-from datetime import datetime, date
+import re
+import random
+import time
+import urllib.parse
+import urllib.request
 
-TEMAS = [
-    {
-        "titulo": "El lugar más profundo de todos los océanos",
-        "gancho": "Existe un lugar en nuestro planeta tan profundo que la luz del Sol jamás llega hasta el fondo.",
-        "desarrollo": "Se llama fosa de las Marianas y alcanza casi once mil metros de profundidad. La presión ahí abajo es brutal: mucho mayor que la que soportamos en la superficie. Y aun en esas condiciones extremas, los científicos han encontrado formas de vida capaces de sobrevivir. Lo increíble es que todavía conocemos muy poco de ese mundo.",
-        "revelacion": "Piensa en esto: hemos explorado más el espacio que algunas de las regiones más profundas de nuestro propio océano.",
-        "cierre": "¿Te atreverías a bajar hasta ese lugar si pudieras regresar sano y salvo? Te leo en los comentarios."
-    },
-    {
-        "titulo": "El animal que tiene tres corazones",
-        "gancho": "Hay un animal marino que tiene tres corazones y sangre azul. Y no, no es una criatura de ciencia ficción.",
-        "desarrollo": "Es el pulpo. Dos de sus corazones bombean sangre hacia las branquias y el tercero la distribuye por el resto del cuerpo. Su sangre es azul porque utiliza una proteína llamada hemocianina, que contiene cobre. Pero eso no es todo: también puede cambiar de color y textura para camuflarse.",
-        "revelacion": "Y hay algo todavía más sorprendente: sus brazos pueden realizar movimientos complejos gracias a su extraordinario sistema nervioso.",
-        "cierre": "¿Ya conocías estos secretos del pulpo? Comenta cuál te sorprendió más."
-    },
-    {
-        "titulo": "El océano que brilla en la oscuridad",
-        "gancho": "Imagina mirar el mar de noche y descubrir que las olas brillan como si tuvieran miles de estrellas.",
-        "desarrollo": "Este fenómeno existe y se conoce como bioluminiscencia. Algunos organismos marinos producen luz mediante reacciones químicas dentro de su cuerpo. En ciertas playas, millones de diminutos organismos pueden iluminar el agua cuando las olas los agitan. Parece magia, pero es un fenómeno natural.",
-        "revelacion": "Para algunas criaturas, producir luz sirve para atraer alimento, confundir depredadores o comunicarse en la oscuridad.",
-        "cierre": "¿Visitarías una playa que brilla durante la noche? Cuéntamelo en los comentarios."
-    },
-    {
-        "titulo": "El tiburón que puede vivir durante siglos",
-        "gancho": "Existe un tiburón que podría vivir más de cuatrocientos años. Algunos ejemplares nacieron antes de que existieran muchas cosas que hoy consideramos normales.",
-        "desarrollo": "Es el tiburón de Groenlandia. Vive en aguas extremadamente frías y crece muy lentamente. Los estudios científicos han estimado que algunos ejemplares pueden alcanzar varios siglos de vida. Su crecimiento lento y su adaptación al frío lo convierten en uno de los vertebrados más longevos conocidos.",
-        "revelacion": "Eso significa que algunos de estos animales podrían haber estado nadando en el océano durante generaciones enteras de seres humanos.",
-        "cierre": "¿Qué crees que ha visto un animal que lleva siglos viviendo? Te leo."
-    },
-    {
-        "titulo": "El sonido misterioso del océano",
-        "gancho": "En el océano se han registrado sonidos tan extraños que durante años despertaron todo tipo de teorías.",
-        "desarrollo": "Uno de los casos más conocidos fue el sonido llamado Bloop, registrado en 1997 por sistemas de monitoreo submarino. Su enorme intensidad hizo que muchas personas imaginaran criaturas gigantes. Sin embargo, investigaciones posteriores apuntaron a que probablemente fue producido por hielo fracturándose.",
-        "revelacion": "Lo fascinante es que el océano puede transportar sonidos a distancias enormes, y todavía hay mucho que aprender sobre sus paisajes acústicos.",
-        "cierre": "¿Qué sonido del océano te gustaría escuchar? Escribe tu respuesta."
-    },
-    {
-        "titulo": "La criatura transparente del océano",
-        "gancho": "En las profundidades del mar existen animales tan transparentes que parecen desaparecer frente a tus ojos.",
-        "desarrollo": "Algunas especies marinas tienen cuerpos casi transparentes. Esta característica puede ayudarles a pasar desapercibidas en un entorno donde esconderse es cuestión de supervivencia. Hay peces, medusas y otros organismos que parecen hechos de cristal, aunque cada uno tiene adaptaciones diferentes.",
-        "revelacion": "En un mundo donde la luz escasea y los depredadores acechan, ser casi invisible puede convertirse en una ventaja extraordinaria.",
-        "cierre": "¿Cuál de estas criaturas te gustaría ver en persona? Déjalo en los comentarios."
-    },
-    {
-        "titulo": "El animal que regenera partes de su cuerpo",
-        "gancho": "Hay animales capaces de recuperar partes de su cuerpo después de perderlas. Algunos parecen tener una habilidad extraordinaria para repararse.",
-        "desarrollo": "Las estrellas de mar son conocidas por su capacidad de regeneración. Dependiendo de la especie y de las condiciones, pueden reconstruir brazos perdidos. En ciertos casos, un fragmento que conserve parte del disco central puede llegar a desarrollar un nuevo individuo.",
-        "revelacion": "No significa que cualquier pedazo pueda convertirse en una estrella completa: su capacidad depende de la especie y de qué parte del cuerpo se haya perdido.",
-        "cierre": "¿Conocías esta capacidad de las estrellas de mar? Comparte el dato con alguien."
-    }
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+
+# ==========================================================
+# FORTALEZA MEDIA AI — VIDEO ENGINE 4.0
+# DESCUBRIMIENTO Y CREACIÓN AUTOMÁTICA DE GUIONES
+# ==========================================================
+
+VERSION = "4.0"
+
+ARCHIVO_GUION = Path("guion.json")
+ARCHIVO_HISTORIAL = Path("historial_temas.json")
+
+IDIOMA = "es-MX"
+DURACION = 60
+
+USER_AGENT = (
+    "FORTALEZA-MEDIA-AI/4.0 "
+    "(educational video production)"
+)
+
+URL_PAGEVIEWS = (
+    "https://wikimedia.org/api/rest_v1/metrics/pageviews/"
+    "top/es.wikipedia/all-access/user/{fecha}"
+)
+
+URL_WIKIPEDIA_API = (
+    "https://es.wikipedia.org/w/api.php"
+)
+
+# Evita artículos que no sirven como tema principal.
+PALABRAS_EXCLUIDAS = [
+    "desambiguación",
+    "anexo:",
+    "categoría:",
+    "especial:",
+    "wikipedia:",
+    "portal:",
+    "discusión:",
+    "usuario:",
+    "plantilla:",
+    "archivo:",
+    "lista de",
+    "elecciones",
+    "resultados electorales",
+]
+
+# Fuentes de respaldo si Wikipedia no responde.
+TEMAS_RESPALDO = [
+    "Fosa de las Marianas",
+    "Pulpo",
+    "Bioluminiscencia",
+    "Tiburón de Groenlandia",
+    "Aurora polar",
+    "Volcanes submarinos",
+    "Estrellas de mar",
+    "Agujeros negros",
+    "Antártida",
+    "La Gran Barrera de Coral",
+    "Marte",
+    "Tardígrados",
+    "La selva amazónica",
+    "La Luna",
+    "El sistema solar",
 ]
 
 
-def seleccionar_tema():
-    dia = date.today().toordinal()
-    return TEMAS[dia % len(TEMAS)]
+# ==========================================================
+# CONEXIÓN A FUENTES PÚBLICAS
+# ==========================================================
+
+def obtener_json(url, timeout=15):
+
+    solicitud = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json"
+        }
+    )
+
+    with urllib.request.urlopen(
+        solicitud,
+        timeout=timeout
+    ) as respuesta:
+
+        contenido = respuesta.read().decode("utf-8")
+
+        return json.loads(contenido)
 
 
-def crear_guion(tema=None):
-    if tema is None or tema.strip().lower() in (
-        "misterios del océano",
-        "misterios del oceano",
-        "aleatorio",
-        "automático",
-        "automatico"
-    ):
-        contenido = seleccionar_tema()
-    else:
-        contenido = next(
-            (t for t in TEMAS if t["titulo"].lower() == tema.strip().lower()),
-            None
+def fecha_pageviews():
+
+    # Los datos del día anterior suelen estar disponibles
+    # con mayor fiabilidad que los del día en curso.
+    fecha = datetime.now(timezone.utc).date() - timedelta(days=1)
+
+    return fecha.strftime("%Y/%m/%d")
+
+
+# ==========================================================
+# HISTORIAL PARA EVITAR REPETICIONES
+# ==========================================================
+
+def cargar_historial():
+
+    if not ARCHIVO_HISTORIAL.exists():
+        return []
+
+    try:
+        with ARCHIVO_HISTORIAL.open(
+            "r",
+            encoding="utf-8"
+        ) as archivo:
+
+            datos = json.load(archivo)
+
+        if isinstance(datos, list):
+            return datos
+
+        if isinstance(datos, dict):
+            return datos.get("temas", [])
+
+    except Exception as error:
+        print(f"[HISTORIAL] No se pudo leer: {error}")
+
+    return []
+
+
+def guardar_historial(historial):
+
+    datos = {
+        "version": VERSION,
+        "actualizado": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "temas": historial[-300:]
+    }
+
+    ARCHIVO_HISTORIAL.write_text(
+        json.dumps(
+            datos,
+            ensure_ascii=False,
+            indent=4
+        ),
+        encoding="utf-8"
+    )
+
+
+def normalizar(texto):
+
+    texto = str(texto).lower().strip()
+
+    texto = re.sub(
+        r"[^a-záéíóúüñ0-9 ]",
+        "",
+        texto
+    )
+
+    return re.sub(r"\s+", " ", texto)
+
+
+def tema_ya_usado(titulo, historial):
+
+    titulo_normalizado = normalizar(titulo)
+
+    for elemento in historial:
+
+        if isinstance(elemento, str):
+            anterior = elemento
+
+        elif isinstance(elemento, dict):
+            anterior = elemento.get("titulo", "")
+
+        else:
+            continue
+
+        if normalizar(anterior) == titulo_normalizado:
+            return True
+
+    return False
+
+
+# ==========================================================
+# DESCUBRIMIENTO DE TEMAS
+# ==========================================================
+
+def obtener_temas_populares():
+
+    fecha = fecha_pageviews()
+
+    url = URL_PAGEVIEWS.format(fecha=fecha)
+
+    datos = obtener_json(url)
+
+    articulos = datos.get("items", [])
+
+    if not articulos:
+        return []
+
+    paginas = articulos[0].get("articles", [])
+
+    candidatos = []
+
+    for pagina in paginas:
+
+        titulo = pagina.get("article", "").replace("_", " ").strip()
+
+        if not titulo:
+            continue
+
+        titulo_lower = titulo.lower()
+
+        if any(
+            palabra in titulo_lower
+            for palabra in PALABRAS_EXCLUIDAS
+        ):
+            continue
+
+        # Evitar páginas que sean fechas o números.
+        if re.fullmatch(r"[\d\s./-]+", titulo):
+            continue
+
+        # Evitar títulos demasiado largos.
+        if len(titulo) > 90:
+            continue
+
+        candidatos.append({
+            "titulo": titulo,
+            "visitas": pagina.get("views", 0)
+        })
+
+    # Priorizar páginas populares sin elegir siempre
+    # necesariamente la primera posición.
+    candidatos.sort(
+        key=lambda x: x["visitas"],
+        reverse=True
+    )
+
+    return candidatos[:60]
+
+
+# ==========================================================
+# INVESTIGACIÓN DEL ARTÍCULO
+# ==========================================================
+
+def investigar_articulo(titulo):
+
+    parametros = {
+        "action": "query",
+        "format": "json",
+        "prop": "extracts",
+        "exintro": "1",
+        "explaintext": "1",
+        "redirects": "1",
+        "titles": titulo
+    }
+
+    url = (
+        URL_WIKIPEDIA_API
+        + "?"
+        + urllib.parse.urlencode(parametros)
+    )
+
+    datos = obtener_json(url)
+
+    paginas = datos.get(
+        "query",
+        {}
+    ).get(
+        "pages",
+        {}
+    )
+
+    for pagina in paginas.values():
+
+        extracto = pagina.get(
+            "extract",
+            ""
+        ).strip()
+
+        titulo_real = pagina.get(
+            "title",
+            titulo
         )
 
-        if contenido is None:
-            contenido = {
-                "titulo": tema.strip(),
-                "gancho": f"Hay algo sobre {tema.strip()} que merece toda tu atención.",
-                "desarrollo": f"Hoy vamos a descubrir algunos aspectos interesantes de {tema.strip()}. Lo importante es separar los datos comprobables de las ideas que todavía no tienen una explicación definitiva.",
-                "revelacion": f"Y lo más interesante de {tema.strip()} es que todavía hay preguntas que vale la pena investigar.",
-                "cierre": "¿Qué opinas? Escribe tu respuesta en los comentarios."
+        if len(extracto) >= 300:
+
+            return {
+                "titulo": titulo_real,
+                "extracto": extracto,
+                "url": (
+                    "https://es.wikipedia.org/wiki/"
+                    + urllib.parse.quote(
+                        titulo_real.replace(" ", "_")
+                    )
+                )
             }
+
+    return None
+
+
+# ==========================================================
+# SELECCIÓN INTELIGENTE DEL TEMA
+# ==========================================================
+
+def seleccionar_tema():
+
+    historial = cargar_historial()
+
+    candidatos = []
+
+    try:
+
+        print("[TEMAS] Consultando temas populares...")
+
+        candidatos = obtener_temas_populares()
+
+        print(
+            f"[TEMAS] Candidatos encontrados: "
+            f"{len(candidatos)}"
+        )
+
+    except Exception as error:
+
+        print(
+            f"[TEMAS] Consulta no disponible: {error}"
+        )
+
+    # Primero se intenta utilizar contenido popular nuevo.
+    for candidato in candidatos:
+
+        titulo = candidato["titulo"]
+
+        if tema_ya_usado(titulo, historial):
+            continue
+
+        try:
+
+            articulo = investigar_articulo(titulo)
+
+            if articulo:
+
+                articulo["visitas"] = candidato["visitas"]
+
+                print(
+                    f"[TEMAS] Tema seleccionado: "
+                    f"{articulo['titulo']}"
+                )
+
+                return articulo
+
+        except Exception as error:
+
+            print(
+                f"[TEMAS] No se pudo investigar "
+                f"{titulo}: {error}"
+            )
+
+        time.sleep(0.15)
+
+    # Si no hay temas populares disponibles,
+    # utilizar el banco de respaldo.
+    disponibles = [
+        tema for tema in TEMAS_RESPALDO
+        if not tema_ya_usado(tema, historial)
+    ]
+
+    if disponibles:
+
+        random.shuffle(disponibles)
+
+        for titulo in disponibles:
+
+            try:
+
+                articulo = investigar_articulo(titulo)
+
+                if articulo:
+                    print(
+                        f"[TEMAS] Tema de respaldo: "
+                        f"{articulo['titulo']}"
+                    )
+                    return articulo
+
+            except Exception:
+                continue
+
+    # Si todos los temas están usados, reiniciar
+    # únicamente el historial de selección.
+    print(
+        "[TEMAS] Se agotaron los temas disponibles. "
+        "Reiniciando historial."
+    )
+
+    guardar_historial([])
+
+    for titulo in TEMAS_RESPALDO:
+
+        try:
+
+            articulo = investigar_articulo(titulo)
+
+            if articulo:
+                return articulo
+
+        except Exception:
+            continue
+
+    raise RuntimeError(
+        "No fue posible encontrar un tema ni consultar "
+        "una fuente de información."
+    )
+
+
+# ==========================================================
+# CONSTRUCCIÓN DEL GUION
+# ==========================================================
+
+def limpiar_texto(texto):
+
+    texto = re.sub(
+        r"\[\d+\]",
+        "",
+        texto
+    )
+
+    texto = re.sub(
+        r"\s+",
+        " ",
+        texto
+    )
+
+    return texto.strip()
+
+
+def separar_oraciones(texto):
+
+    texto = limpiar_texto(texto)
+
+    oraciones = re.split(
+        r"(?<=[.!?])\s+",
+        texto
+    )
+
+    return [
+        o.strip()
+        for o in oraciones
+        if len(o.strip()) > 35
+    ]
+
+
+def construir_guion(articulo):
+
+    titulo = articulo["titulo"]
+
+    extracto = articulo["extracto"]
+
+    fuente = articulo["url"]
+
+    oraciones = separar_oraciones(extracto)
+
+    if len(oraciones) < 3:
+        raise ValueError(
+            "El artículo no contiene suficiente información."
+        )
+
+    # Se utilizan oraciones del artículo como base
+    # para reducir la invención de datos.
+    seleccionadas = oraciones[:8]
+
+    desarrollo = " ".join(seleccionadas[:6])
+
+    revelacion = (
+        "Y esto es solamente una parte de lo que "
+        "se conoce sobre este tema. "
+        "La información sigue siendo objeto de estudio."
+    )
+
+    gancho = (
+        f"¿Sabías que existe algo llamado {titulo}? "
+        "Lo que hay detrás de este tema es mucho "
+        "más interesante de lo que parece."
+    )
+
+    cierre = (
+        "¿Ya conocías este tema? "
+        "Cuéntame qué fue lo que más te sorprendió "
+        "y comparte este video."
+    )
 
     escenas = [
         {
             "numero": 1,
-            "duracion": 5,
+            "duracion": 7,
             "tipo": "gancho",
-            "narracion": contenido["gancho"]
+            "narracion": gancho
         },
         {
             "numero": 2,
-            "duracion": 40,
-            "tipo": "desarrollo",
-            "narracion": contenido["desarrollo"]
+            "duracion": 43,
+            "tipo": "investigacion",
+            "narracion": desarrollo
         },
         {
             "numero": 3,
-            "duracion": 15,
+            "duracion": 10,
             "tipo": "revelacion_y_cierre",
             "narracion": (
-                contenido["revelacion"] + " " + contenido["cierre"]
+                revelacion + " " + cierre
             )
         }
     ]
 
+    descripcion = (
+        f"{titulo}\n\n"
+        "Descubre este tema con FORTALEZA MEDIA AI.\n\n"
+        f"Fuente informativa: {fuente}\n\n"
+        "Contenido elaborado a partir de información "
+        "documental. Consulta la fuente para conocer "
+        "el contexto completo."
+    )
+
     return {
-        "titulo": contenido["titulo"],
+        "titulo": titulo,
         "formato": "YouTube Shorts",
-        "duracion": 60,
-        "idioma": "es-MX",
-        "estilo": "misterio, suspenso y divulgación",
-        "escenas": escenas,
-        "descripcion": (
-            contenido["titulo"]
-            + " ¿Conocías este dato? Comenta tu opinión y comparte el video."
+        "duracion": DURACION,
+        "idioma": IDIOMA,
+        "estilo": (
+            "documental, misterio, divulgación, "
+            "suspenso y curiosidades"
         ),
+        "fuente": fuente,
+        "escenas": escenas,
+        "descripcion": descripcion,
         "hashtags": [
             "#Shorts",
             "#Curiosidades",
-            "#Misterios",
+            "#AprendeEnTikTok",
             "#Ciencia",
+            "#Documental",
             "#FORTALEZAMEDIA"
         ],
-        "creado": datetime.now().isoformat()
+        "creado": datetime.now(
+            timezone.utc
+        ).isoformat()
     }
 
 
-def guardar_guion(tema=None):
-    guion = crear_guion(tema)
+# ==========================================================
+# GUARDAR GUION E HISTORIAL
+# ==========================================================
 
-    with open("guion.json", "w", encoding="utf-8") as archivo:
-        json.dump(
+def guardar_guion(tema=None):
+
+    # Permite conservar la compatibilidad con main.py.
+    # Si se indica un tema manual, se investiga ese tema.
+    if tema and normalizar(tema) not in (
+        "aleatorio",
+        "automatico",
+        "misterios del oceano"
+    ):
+
+        articulo = investigar_articulo(tema)
+
+        if not articulo:
+            raise RuntimeError(
+                f"No se pudo investigar el tema: {tema}"
+            )
+
+    else:
+
+        articulo = seleccionar_tema()
+
+    guion = construir_guion(articulo)
+
+    ARCHIVO_GUION.write_text(
+        json.dumps(
             guion,
-            archivo,
             ensure_ascii=False,
             indent=4
-        )
+        ),
+        encoding="utf-8"
+    )
+
+    historial = cargar_historial()
+
+    historial.append({
+        "titulo": articulo["titulo"],
+        "fecha": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "fuente": articulo["url"]
+    })
+
+    guardar_historial(historial)
+
+    print(
+        "[GUION] Guion generado correctamente: "
+        + guion["titulo"]
+    )
 
     return guion
+
+
+# ==========================================================
+# PRUEBA DIRECTA
+# ==========================================================
+
+if __name__ == "__main__":
+
+    print("=" * 55)
+    print("FORTALEZA MEDIA AI — VIDEO ENGINE 4.0")
+    print("=" * 55)
+
+    resultado = guardar_guion()
+
+    print("\nTÍTULO:")
+    print(resultado["titulo"])
+
+    print("\nESCENAS:")
+
+    for escena in resultado["escenas"]:
+
+        print(
+            f"\n{escena['numero']}. "
+            f"{escena['tipo'].upper()}"
+        )
+
+        print(escena["narracion"])
+
+    print("\nGUION GUARDADO EN guion.json")
