@@ -18,10 +18,6 @@ import edge_tts
 import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# ==========================================================
-# FORTALEZA MEDIA AI 36.0 — MOTOR DE CLIP CORTO (TIKTOK)
-# ==========================================================
-
 FPS = 30
 OUTPUT = Path("output")
 RECURSOS = OUTPUT / "recursos_short"
@@ -48,25 +44,7 @@ def obtener_duracion(ffmpeg, archivo):
     if not m: raise RuntimeError(f"Error de duración: {archivo}")
     h, mi, s = m.groups(); return int(h)*3600 + int(mi)*60 + float(s)
 
-def calcular_cortes(palabras, duracion_total):
-    if duracion_total <= 0: return [0.0, duracion_total]
-    puntos = [(palabras[i-1]["fin"] + palabras[i]["inicio"])/2 for i in range(1, len(palabras)) if palabras[i]["inicio"] - palabras[i-1]["fin"] >= 0.25]
-    puntos += [p["fin"] + 0.05 for p in palabras if p["texto"].strip().endswith((".", "?", "!"))]
-    puntos = sorted(set(round(c, 3) for c in puntos))
-    cortes = [0.0]
-    for c in puntos:
-        if (c < 5.0 and c - cortes[-1] >= 1.2) or (c >= 5.0 and c - cortes[-1] >= 1.5 and duracion_total - c >= 1.5): cortes.append(c)
-    resultado = [0.0]
-    for c in cortes[1:]:
-        while c - resultado[-1] > 3.5: resultado.append(resultado[-1] + 3.5)
-        resultado.append(c)
-    while duracion_total - resultado[-1] > 3.5: resultado.append(resultado[-1] + 3.5)
-    if resultado[-1] < duracion_total: resultado.append(duracion_total)
-    else: resultado[-1] = duracion_total
-    return resultado
-
-# --- OBTENER VIDEO DE FONDO (GAMEPLAY) ---
-def obtener_video_fondo():
+def obtener_video_fondo(ffmpeg):
     pixabay_key = os.environ.get("PIXABAY_API_KEY")
     if pixabay_key:
         try:
@@ -90,10 +68,9 @@ def obtener_video_fondo():
     ruta = RECURSOS / "fondo_emergencia.jpg"
     img.save(ruta)
     video_path = RECURSOS / "fondo_gameplay.mp4"
-    subprocess.run(["ffmpeg", "-y", "-loop", "1", "-i", str(ruta), "-c:v", "libx264", "-t", "60", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_path)], check=True, capture_output=True)
+    subprocess.run([ffmpeg, "-y", "-loop", "1", "-i", str(ruta), "-c:v", "libx264", "-t", "60", "-pix_fmt", "yuv420p", "-r", str(FPS), str(video_path)], check=True, capture_output=True)
     return str(video_path)
 
-# --- AUDIO ---
 async def generar_voz(texto, ruta, voz_elegida):
     for voz in [voz_elegida, "es-MX-DaliaNeural", "es-MX-JorgeNeural"]:
         try:
@@ -110,7 +87,6 @@ async def generar_voz(texto, ruta, voz_elegida):
         except Exception: pass
     raise RuntimeError("Fallo total de audio.")
 
-# --- SUBTÍTULOS ---
 def crear_subtitulos(marcas, dur_voz):
     grupos, grupo = [], []
     for p in marcas:
@@ -150,7 +126,6 @@ def crear_scroll_stopper():
     img.save(ruta)
     return str(ruta)
 
-# --- ORQUESTADOR DEL SHORT ---
 async def crear_short():
     preparar_entorno()
     with open("guion.json", encoding="utf-8") as f: guion = json.load(f)
@@ -162,21 +137,18 @@ async def crear_short():
         print("[ERROR] No hay gancho_corto en el guion.")
         return None
 
-    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    video_fondo = obtener_video_fondo()
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe() # <--- AQUÍ OBTENEMOS LA RUTA CORRECTA
+    video_fondo = obtener_video_fondo(ffmpeg)
     
     print(f"--- GENERANDO SHORT: {guion['titulo']} ---")
     
-    # 1. Audio del Gancho
     ruta_voz = RECURSOS / "voz_gancho.mp3"
     marcas = await generar_voz(gancho, ruta_voz, voz)
     dur_voz = obtener_duracion(ffmpeg, ruta_voz)
     
-    # 2. Subtítulos y Letrero
     subtitulos = crear_subtitulos(marcas, dur_voz)
     scroll_img = crear_scroll_stopper()
     
-    # 3. Componer el Video
     cmd_comp = [ffmpeg, "-y", "-stream_loop", "-1", "-i", video_fondo, "-i", str(ruta_voz)]
     for sub in subtitulos: cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", sub["archivo"]])
     cmd_comp.extend(["-loop", "1", "-framerate", str(FPS), "-i", scroll_img])
@@ -187,7 +159,6 @@ async def crear_short():
         filtros.append(f"{actual}[{idx}:v]overlay=0:0:enable='between(t\\,{sub['inicio']:.3f}\\,{sub['fin']:.3f})'[v{idx}]")
         actual = f"[v{idx}]"; idx += 1
         
-    # Superponer Scroll Stopper (solo primeros 3 segundos)
     filtros.append(f"{actual}[{idx}:v]overlay=0:0:enable='between(t\\,0\\,3)'[vfinal]")
     actual = "[vfinal]"
     
@@ -201,11 +172,10 @@ async def crear_short():
     
     subprocess.run(cmd_comp, check=True, capture_output=True)
     
-    # Barra de progreso final
     dur_total = obtener_duracion(ffmpeg, destino)
     destino_final = OUTPUT / "fortaleza_short_final.mp4"
     filtro_barra = f"[0:v]drawbox=x=0:y=h-10:w='iw*t/{dur_total}':h=10:color=red@0.9:t=fill[vout]"
-    subprocess.run(["ffmpeg", "-y", "-i", str(destino), "-filter_complex", filtro_barra, "-map", "[vout]", "-map", "0:a", "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-c:a", "copy", str(destino_final)], check=True, capture_output=True)
+    subprocess.run([ffmpeg, "-y", "-i", str(destino), "-filter_complex", filtro_barra, "-map", "[vout]", "-map", "0:a", "-c:v", "libx264", "-preset", "medium", "-crf", "24", "-c:a", "copy", str(destino_final)], check=True, capture_output=True)
     
     print(f"✅ SHORT COMPLETADO ({dur_total:.1f} segundos)")
     return str(destino_final)
