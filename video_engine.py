@@ -14,9 +14,21 @@ PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco"
 ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor"]
 OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "una llave que no abre nada"]
 
+# --- FUNCIÓN DE VALIDACIÓN (Evita que el sistema colapse si la IA devuelve texto en vez de JSON) ---
+def validar_serie(serie):
+    if not serie or not isinstance(serie, dict): return False
+    if "titulo_serie" not in serie or "episodios" not in serie: return False
+    if not isinstance(serie["episodios"], list) or len(serie["episodios"]) < 5: return False
+    for ep in serie["episodios"]:
+        if not isinstance(ep, dict): return False
+        if not all(k in ep for k in ["parte", "titulo_episodio", "narracion", "prompt_visual"]): return False
+    return True
+
 def cargar_estado():
     if ARCHIVO_ESTADO.exists():
-        with open(ARCHIVO_ESTADO, "r") as f: return json.load(f)
+        try:
+            with open(ARCHIVO_ESTADO, "r") as f: return json.load(f)
+        except: pass
     return {"serie_actual": None, "parte_actual": 1, "total_partes": 5}
 
 def guardar_estado(estado):
@@ -38,7 +50,6 @@ def generar_con_groq(prompt):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key: return None
     headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
-    # Usamos el modelo actual recomendado por Groq
     payload = {"model": "openai/gpt-oss-120b", "messages": [{"role": "system", "content": "Eres un guionista experto en mini-series."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
     try:
         resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
@@ -47,7 +58,6 @@ def generar_con_groq(prompt):
     return None
 
 def generar_con_pollinations(prompt):
-    # Endpoint actualizado compatible con OpenAI
     try:
         url = "https://gen.pollinations.ai/v1/chat/completions"
         payload = {
@@ -85,8 +95,8 @@ def crear_nueva_serie():
     
     plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
     
-    if not plan or "episodios" not in plan:
-        print("[AVISO] IA falló. Creando serie de respaldo única.")
+    if not validar_serie(plan):
+        print("[AVISO] IA falló o generó un formato inválido. Creando serie de respaldo única.")
         p = random.choice(PERSONAJES)
         e = random.choice(ESCENARIOS)
         o = random.choice(OBJETOS)
@@ -106,19 +116,38 @@ def crear_nueva_serie():
 
 def obtener_guion_hoy():
     estado = cargar_estado()
+    crear_nueva = False
+    
+    # Comprobar si hay que crear una nueva serie o si la existente está dañada
     if estado["serie_actual"] is None or estado["parte_actual"] > estado["total_partes"]:
+        crear_nueva = True
+    elif not ARCHIVO_SERIE.exists():
+        crear_nueva = True
+    else:
+        try:
+            with open(ARCHIVO_SERIE, "r", encoding="utf-8") as f:
+                serie_actual = json.load(f)
+            if not validar_serie(serie_actual):
+                print("[SISTEMA] La serie guardada está corrupta o incompleta. Generando una nueva...")
+                crear_nueva = True
+        except:
+            print("[SISTEMA] No se pudo leer la serie guardada. Generando una nueva...")
+            crear_nueva = True
+
+    if crear_nueva:
         print("[SISTEMA] Iniciando nueva mini-serie de 5 partes...")
         nueva_serie = crear_nueva_serie()
-        with open(ARCHIVO_SERIE, "w") as f: json.dump(nueva_serie, f, ensure_ascii=False, indent=4)
+        with open(ARCHIVO_SERIE, "w", encoding="utf-8") as f: json.dump(nueva_serie, f, ensure_ascii=False, indent=4)
         estado = {"serie_actual": nueva_serie["titulo_serie"], "parte_actual": 1, "total_partes": 5}
         guardar_estado(estado)
         
-    with open(ARCHIVO_SERIE, "r") as f: serie = json.load(f)
+    with open(ARCHIVO_SERIE, "r", encoding="utf-8") as f: serie = json.load(f)
     
     parte = estado["parte_actual"]
     print(f"[SISTEMA] Generando Parte {parte} de 5: {serie['titulo_serie']}")
     
     episodio_hoy = serie["episodios"][parte - 1]
+    
     guion_hoy = {
         "titulo_serie": serie["titulo_serie"],
         "parte": parte,
@@ -128,7 +157,9 @@ def obtener_guion_hoy():
         "voz": "es-MX-DaliaNeural"
     }
     
-    with open("guion.json", "w") as f: json.dump(guion_hoy, f, ensure_ascii=False, indent=4)
+    with open("guion.json", "w", encoding="utf-8") as f: json.dump(guion_hoy, f, ensure_ascii=False, indent=4)
+    
     estado["parte_actual"] += 1
     guardar_estado(estado)
+    
     return guion_hoy
