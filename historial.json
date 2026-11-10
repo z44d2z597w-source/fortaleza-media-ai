@@ -37,9 +37,52 @@
       ],
       "id": "e2e119f8dadfcd0f",
       "fecha": "2026-11-10T15:51:50.152690+00:00"
+    },
+    {
+      "titulo_serie": "Misterios inexplicables",
+      "titulo": "Arena líquida y el ojo que todo lo ve",
+      "parte": 2,
+      "estilo_visual": "satisfactorio",
+      "gancho": "¿Alguna vez viste cómo la arena se vuelve líquida sin agua?",
+      "narracion": "¿Alguna vez viste cómo la arena se vuelve líquida sin agua? En menos de tres segundos, un chorro de slime fluorescente golpea una superficie y la transforma en un remolino hipnótico que parece desafiar la gravedad. Hoy nos adentramos en el enigma del Deslizamiento de arena sonora, un fenómeno reportado en varios desiertos donde la arena vibra y se desplaza como una ola silenciosa. ¿Qué la impulsa? Algunos testigos describen un zumbido bajo, como si la tierra susurrara un secreto. Primero, observamos un frasco de arena fina mezclada con polvo de mica; al agitarlo, la partícula adquiere un brillo que se extiende como un espejo líquido. El movimiento se acelera, formando patrones que recuerdan a ondas en un lago. De repente, la cámara se acerca a una bandeja donde una corriente de slime verde se encuentra con la arena, y ambos se funden, creando una superficie que parece respirar. ¿Podría la fricción entre granos generar una energía suficiente para moverlos sin viento? Los científicos aún no lo confirman, pero la evidencia visual habla por sí sola. En la siguiente escena, un rayo de luz atraviesa la mezcla, revelando una figura que se forma y desaparece en segundos: la silueta de un ojo que todo lo ve. El giro final llega cuando la cámara retrocede y muestra que todo el experimento está dentro de una caja de cristal, observada por una cámara oculta que registra cada detalle. El verdadero misterio no es la arena, sino quién la está mirando.",
+      "escenas": [
+        {
+          "texto": "¿Alguna vez viste cómo la arena se vuelve líquida sin agua?",
+          "visual": "Primer plano de slime fluorescente impactando arena gris, creando ondas de color que se expanden rápidamente."
+        },
+        {
+          "texto": "Hoy nos adentramos en el enigma del Deslizamiento de arena sonora.",
+          "visual": "Tomas panorámicas de dunas del desierto con sutiles vibraciones simuladas, la arena parece ondular sin viento."
+        },
+        {
+          "texto": "Observamos un frasco de arena fina mezclada con polvo de mica.",
+          "visual": "Manos agitando un frasco; la mezcla brilla y se vuelve líquida como espejo, reflejando luz en patrones hipnóticos."
+        },
+        {
+          "texto": "La cámara se acerca a una bandeja donde slime verde se encuentra con la arena.",
+          "visual": "Slow‑motion del slime fundiéndose con la arena, formando una superficie que pulsa como si respirara."
+        },
+        {
+          "texto": "¿Podría la fricción entre granos generar energía suficiente para moverlos sin viento?",
+          "visual": "Primer plano de granos de arena rozándose en cámara lenta, emitiendo pequeñas chispas de luz."
+        },
+        {
+          "texto": "Un rayo de luz atraviesa la mezcla, revelando la silueta de un ojo que todo lo ve.",
+          "visual": "Haz de luz penetrando la mezcla, formando temporalmente la figura de un ojo que se desvanece al instante."
+        },
+        {
+          "texto": "El giro final: todo el experimento dentro de una caja de cristal, observada por una cámara oculta.",
+          "visual": "Desplazamiento de cámara hacia atrás mostrando una caja de cristal transparente con la escena completa dentro, una cámara pequeña enfocando todo."
+        }
+      ],
+      "id": "2a6e91f847d4dbe0",
+      "fecha": "2026-11-10T16:16:09.431194+00:00"
     }
   ],
   "temas": [
     "Misterios inexplicables"
+  ],
+  "estilos": [
+    "satisfactorio"
   ]
 }
