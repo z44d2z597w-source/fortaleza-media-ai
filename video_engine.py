@@ -1,165 +1,285 @@
+import os
 import json
 import random
-import re
+import hashlib
 import requests
-import urllib.parse
-import os
-from pathlib import Path
+from datetime import datetime, timezone
 
-ARCHIVO_SERIE = Path("guion_serie.json")
-ARCHIVO_ESTADO = Path("estado_serie.json")
-ARCHIVO_HISTORIAL = Path("historial_creativo.json")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-PERSONAJES = ["un detective cansado", "una niña perdida", "un científico loco", "un anciano ciego", "una madre desesperada"]
-ESCENARIOS = ["una estación de tren abandonada", "un hospital psiquiátrico", "un bosque bajo la lluvia", "un edificio sin ascensor"]
-OBJETOS = ["un reloj que va hacia atrás", "un espejo que muestra el futuro", "una carta escrita con sangre", "una llave que no abre nada"]
+HISTORIAL = "historial.json"
+DURACION_OBJETIVO = 170
 
-# --- FUNCIÓN DE VALIDACIÓN (Evita que el sistema colapse si la IA devuelve texto en vez de JSON) ---
-def validar_serie(serie):
-    if not serie or not isinstance(serie, dict): return False
-    if "titulo_serie" not in serie or "episodios" not in serie: return False
-    if not isinstance(serie["episodios"], list) or len(serie["episodios"]) < 5: return False
-    for ep in serie["episodios"]:
-        if not isinstance(ep, dict): return False
-        if not all(k in ep for k in ["parte", "titulo_episodio", "narracion", "prompt_visual"]): return False
-    return True
+TEMAS = [
+    "Misterios inexplicables",
+    "Historias de terror psicológico",
+    "Casos extraños",
+    "Secretos de la historia",
+    "Ciencia sorprendente",
+    "Misterios del océano",
+    "Historias de supervivencia",
+    "Fenómenos inexplicables",
+    "Leyendas urbanas",
+    "Experimentos científicos",
+]
 
-def cargar_estado():
-    if ARCHIVO_ESTADO.exists():
-        try:
-            with open(ARCHIVO_ESTADO, "r") as f: return json.load(f)
-        except: pass
-    return {"serie_actual": None, "parte_actual": 1, "total_partes": 5}
-
-def guardar_estado(estado):
-    with open(ARCHIVO_ESTADO, "w") as f: json.dump(estado, f, indent=4)
 
 def cargar_historial():
-    if ARCHIVO_HISTORIAL.exists():
-        try:
-            with open(ARCHIVO_HISTORIAL, "r") as f: return json.load(f)
-        except: return []
-    return []
+    if not os.path.exists(HISTORIAL):
+        return {"episodios": [], "temas": []}
 
-def guardar_historial(titulo):
-    hist = cargar_historial()
-    hist.append(titulo)
-    with open(ARCHIVO_HISTORIAL, "w") as f: json.dump(hist[-30:], f, indent=4)
-
-def generar_con_groq(prompt):
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key: return None
-    headers = {"Authorization": f"Bearer {api_key.strip()}", "Content-Type": "application/json"}
-    payload = {"model": "openai/gpt-oss-120b", "messages": [{"role": "system", "content": "Eres un guionista experto en mini-series."}, {"role": "user", "content": prompt}], "temperature": 0.8, "response_format": {"type": "json_object"}}
     try:
-        resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
-        if resp.status_code == 200: return json.loads(resp.json()["choices"][0]["message"]["content"])
-    except: pass
-    return None
+        with open(HISTORIAL, "r", encoding="utf-8") as archivo:
+            datos = json.load(archivo)
 
-def generar_con_pollinations(prompt):
-    try:
-        url = "https://gen.pollinations.ai/v1/chat/completions"
-        payload = {
-            "model": "openai",
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"}
-        }
-        resp = requests.post(url, json=payload, timeout=90)
-        if resp.status_code == 200:
-            return json.loads(resp.json()["choices"][0]["message"]["content"])
-    except: pass
-    return None
+        if not isinstance(datos, dict):
+            raise ValueError("Historial inválido")
 
-def crear_nueva_serie():
-    historial = cargar_historial()
-    temas_prohibidos = ", ".join(historial) if historial else "Ninguno"
-    
-    prompt = f"""
-    Crea una MINI-SERIE de misterio de 5 episodios.
-    NO USES estos temas anteriores: {temas_prohibidos}.
-    Cada episodio debe durar 1 minuto (aprox 150 palabras). Cada episodio debe terminar en un CLIFFHANGER.
-    
-    DEVUELVE EXCLUSIVAMENTE UN JSON CON ESTA ESTRUCTURA:
+        datos.setdefault("episodios", [])
+        datos.setdefault("temas", [])
+        return datos
+
+    except Exception:
+        return {"episodios": [], "temas": []}
+
+
+def guardar_historial(datos):
+    temporal = HISTORIAL + ".tmp"
+
+    with open(temporal, "w", encoding="utf-8") as archivo:
+        json.dump(datos, archivo, ensure_ascii=False, indent=2)
+
+    os.replace(temporal, HISTORIAL)
+
+
+def elegir_tema(historial):
+    usados = historial.get("temas", [])
+    disponibles = [tema for tema in TEMAS if tema not in usados]
+
+    if not disponibles:
+        historial["temas"] = []
+        disponibles = TEMAS.copy()
+
+    return random.choice(disponibles)
+
+
+def crear_prompt(tema, episodio):
+    return f"""
+Crea un guion original en español mexicano para un YouTube Short.
+
+SERIE: {tema}
+EPISODIO: {episodio} de 5
+
+REQUISITOS:
+- Narración natural, emocionante y fácil de entender.
+- Entre 300 y 360 palabras.
+- Comienza con una frase que atrape desde el primer segundo.
+- Mantén suspenso y curiosidad.
+- No repitas ideas ni frases.
+- Incluye detalles visuales para crear escenas.
+- Termina con un giro, revelación o suspenso.
+- Si es una historia ficticia, no la presentes como un caso real.
+- El episodio debe conectar con el siguiente.
+- No incluyas instrucciones para el editor.
+
+Responde exclusivamente con JSON válido usando esta estructura:
+
+{{
+  "titulo_serie": "Nombre de la serie",
+  "titulo": "Título atractivo del episodio",
+  "parte": {episodio},
+  "narracion": "Texto completo de la narración",
+  "escenas": [
     {{
-        "titulo_serie": "Título impactante",
-        "episodios": [
-            {{"parte": 1, "titulo_episodio": "El inicio", "narracion": "Texto de 1 minuto.", "prompt_visual": "Prompt en inglés para la imagen de fondo del episodio 1."}},
-            {{"parte": 2, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
-            {{"parte": 3, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
-            {{"parte": 4, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}},
-            {{"parte": 5, "titulo_episodio": "...", "narracion": "...", "prompt_visual": "Prompt diferente..."}}
-        ]
+      "texto": "Parte de la narración",
+      "visual": "Descripción detallada de lo que debe aparecer en pantalla"
     }}
-    """
-    
-    plan = generar_con_groq(prompt) or generar_con_pollinations(prompt)
-    
-    if not validar_serie(plan):
-        print("[AVISO] IA falló o generó un formato inválido. Creando serie de respaldo única.")
-        p = random.choice(PERSONAJES)
-        e = random.choice(ESCENARIOS)
-        o = random.choice(OBJETOS)
-        plan = {
-            "titulo_serie": f"El enigma de {o} en {e}",
-            "episodios": [
-                {"parte": 1, "titulo_episodio": "El descubrimiento", "narracion": f"{p.capitalize()} llegó a {e} y encontró {o}. Un ruido extraño lo hizo girar.", "prompt_visual": f"Cinematic, vertical, {p} in {e} holding {o}"},
-                {"parte": 2, "titulo_episodio": "La primera pista", "narracion": f"Al inspeccionar {o}, {p} notó algo imposible. Una inscripción que no debía estar ahí.", "prompt_visual": f"Cinematic, vertical, close up of {o}"},
-                {"parte": 3, "titulo_episodio": "El acecho", "narracion": f"De repente, las luces se apagaron. Alguien más estaba en {e}.", "prompt_visual": f"Cinematic, vertical, {p} looking scared in the dark"},
-                {"parte": 4, "titulo_episodio": "La revelación", "narracion": f"{p.capitalize()} descubrió la verdad sobre {o}. Todo era una trampa.", "prompt_visual": f"Cinematic, vertical, mysterious figure revealing the truth"},
-                {"parte": 5, "titulo_episodio": "El final", "narracion": f"La huida final. {p.capitalize()} logró escapar, pero algo lo perseguirá.", "prompt_visual": f"Cinematic, vertical, {p} running away at night"}
-            ]
-        }
+  ]
+}}
 
-    guardar_historial(plan["titulo_serie"])
-    return plan
+Incluye entre 6 y 8 escenas.
+"""
+
+
+def consultar_groq(prompt):
+    if not GROQ_API_KEY:
+        return None
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    encabezados = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    datos = {
+        "model": "openai/gpt-oss-120b",
+        "messages": [
+            {
+                "role": "system",
+                "content": "Eres un guionista profesional especializado en historias virales originales."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.9,
+        "max_tokens": 3500,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        respuesta = requests.post(
+            url,
+            headers=encabezados,
+            json=datos,
+            timeout=60,
+        )
+
+        respuesta.raise_for_status()
+        contenido = respuesta.json()["choices"][0]["message"]["content"]
+        return json.loads(contenido)
+
+    except Exception as error:
+        print(f"[AVISO] Groq no disponible: {error}")
+        return None
+
+
+def crear_guion_respaldo(tema, episodio):
+    titulo = f"El misterio que nadie ha podido explicar - Parte {episodio}"
+
+    narracion = (
+        f"Hay historias que parecen imposibles, pero esta es una de esas que "
+        f"te hacen cuestionar todo. Hoy conocerás una historia sobre {tema.lower()}. "
+        f"Todo comenzó con un descubrimiento inesperado. Al principio, nadie le dio "
+        f'importancia, pero pronto aparecieron detalles que no tenían explicación. '
+        f"Los investigadores comenzaron a reunir información y encontraron "
+        f"contradicciones que cambiaron por completo lo que creían saber. "
+        f"Cada nueva pista abría otra pregunta. Y cuando parecía que finalmente "
+        f"habían encontrado una respuesta, apareció un detalle que nadie había "
+        f"notado. Lo más extraño es que ese detalle conectaba con algo ocurrido "
+        f"mucho tiempo atrás. Algunas personas creen que todo tiene una explicación "
+        f"lógica. Otras piensan que todavía falta descubrir la parte más importante. "
+        f"Por ahora, el misterio continúa abierto. Y lo que viene después podría "
+        f"cambiar la historia por completo."
+    )
+
+    escenas = [
+        {
+            "texto": "Todo comenzó con un descubrimiento inesperado.",
+            "visual": f"Escena cinematográfica misteriosa relacionada con {tema}"
+        },
+        {
+            "texto": "Al principio, nadie le dio importancia.",
+            "visual": "Lugar vacío, ambiente inquietante, iluminación dramática"
+        },
+        {
+            "texto": "Aparecieron detalles que no tenían explicación.",
+            "visual": "Primer plano de documentos, fotografías y pistas"
+        },
+        {
+            "texto": "Los investigadores comenzaron a reunir información.",
+            "visual": "Investigadores examinando evidencias en una habitación"
+        },
+        {
+            "texto": "Cada nueva pista abría otra pregunta.",
+            "visual": "Montaje cinematográfico de pistas y objetos misteriosos"
+        },
+        {
+            "texto": "Apareció un detalle que nadie había notado.",
+            "visual": "Primer plano de un objeto oculto entre las evidencias"
+        },
+        {
+            "texto": "El misterio continúa abierto.",
+            "visual": "Paisaje oscuro y misterioso con cámara alejándose"
+        },
+    ]
+
+    return {
+        "titulo_serie": tema,
+        "titulo": titulo,
+        "parte": episodio,
+        "narracion": narracion,
+        "escenas": escenas,
+    }
+
+
+def validar_guion(guion):
+    if not isinstance(guion, dict):
+        return False
+
+    campos = ["titulo_serie", "titulo", "parte", "narracion", "escenas"]
+
+    if not all(campo in guion for campo in campos):
+        return False
+
+    if not isinstance(guion["narracion"], str):
+        return False
+
+    if len(guion["narracion"].split()) < 80:
+        return False
+
+    if not isinstance(guion["escenas"], list):
+        return False
+
+    if len(guion["escenas"]) < 3:
+        return False
+
+    for escena in guion["escenas"]:
+        if not isinstance(escena, dict):
+            return False
+
+        if "texto" not in escena or "visual" not in escena:
+            return False
+
+    return True
+
 
 def obtener_guion_hoy():
-    estado = cargar_estado()
-    crear_nueva = False
-    
-    # Comprobar si hay que crear una nueva serie o si la existente está dañada
-    if estado["serie_actual"] is None or estado["parte_actual"] > estado["total_partes"]:
-        crear_nueva = True
-    elif not ARCHIVO_SERIE.exists():
-        crear_nueva = True
-    else:
-        try:
-            with open(ARCHIVO_SERIE, "r", encoding="utf-8") as f:
-                serie_actual = json.load(f)
-            if not validar_serie(serie_actual):
-                print("[SISTEMA] La serie guardada está corrupta o incompleta. Generando una nueva...")
-                crear_nueva = True
-        except:
-            print("[SISTEMA] No se pudo leer la serie guardada. Generando una nueva...")
-            crear_nueva = True
+    historial = cargar_historial()
 
-    if crear_nueva:
-        print("[SISTEMA] Iniciando nueva mini-serie de 5 partes...")
-        nueva_serie = crear_nueva_serie()
-        with open(ARCHIVO_SERIE, "w", encoding="utf-8") as f: json.dump(nueva_serie, f, ensure_ascii=False, indent=4)
-        estado = {"serie_actual": nueva_serie["titulo_serie"], "parte_actual": 1, "total_partes": 5}
-        guardar_estado(estado)
-        
-    with open(ARCHIVO_SERIE, "r", encoding="utf-8") as f: serie = json.load(f)
-    
-    parte = estado["parte_actual"]
-    print(f"[SISTEMA] Generando Parte {parte} de 5: {serie['titulo_serie']}")
-    
-    episodio_hoy = serie["episodios"][parte - 1]
-    
-    guion_hoy = {
-        "titulo_serie": serie["titulo_serie"],
-        "parte": parte,
-        "titulo_episodio": episodio_hoy["titulo_episodio"],
-        "narracion": episodio_hoy["narracion"],
-        "prompt_visual": episodio_hoy["prompt_visual"],
-        "voz": "es-MX-DaliaNeural"
-    }
-    
-    with open("guion.json", "w", encoding="utf-8") as f: json.dump(guion_hoy, f, ensure_ascii=False, indent=4)
-    
-    estado["parte_actual"] += 1
-    guardar_estado(estado)
-    
-    return guion_hoy
+    episodios = historial.get("episodios", [])
+
+    if episodios:
+        ultimo = episodios[-1]
+
+        if ultimo.get("parte", 0) < 5:
+            tema = ultimo.get("titulo_serie", "Misterios inexplicables")
+            episodio = ultimo.get("parte", 0) + 1
+        else:
+            tema = elegir_tema(historial)
+            episodio = 1
+    else:
+        tema = elegir_tema(historial)
+        episodio = 1
+
+    prompt = crear_prompt(tema, episodio)
+    guion = consultar_groq(prompt)
+
+    if not validar_guion(guion):
+        print("[AVISO] Usando guion de respaldo.")
+        guion = crear_guion_respaldo(tema, episodio)
+
+    guion["parte"] = episodio
+
+    identificador = hashlib.sha256(
+        f"{guion['titulo_serie']}-{guion['titulo']}-{episodio}".encode("utf-8")
+    ).hexdigest()[:16]
+
+    guion["id"] = identificador
+    guion["fecha"] = datetime.now(timezone.utc).isoformat()
+
+    historial.setdefault("episodios", []).append(guion)
+    historial.setdefault("temas", [])
+
+    if tema not in historial["temas"]:
+        historial["temas"].append(tema)
+
+    historial["episodios"] = historial["episodios"][-100:]
+    guardar_historial(historial)
+
+    print(f"[GUION] {guion['titulo']}")
+    print(f"[SERIE] {guion['titulo_serie']} - Parte {episodio}")
+
+    return guion
