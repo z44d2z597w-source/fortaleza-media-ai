@@ -1,10 +1,11 @@
+
 name: FORTALEZA MEDIA AI - SHORTS DIARIOS
 
 on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: "Publicar automáticamente en YouTube"
+        description: "Publicar el video en YouTube"
         required: true
         type: boolean
         default: false
@@ -34,9 +35,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
-      - name: Instalar dependencias
+      - name: Instalar FFmpeg y dependencias
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
@@ -78,10 +79,46 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Publicar en YouTube
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publicar == true }}
+      - name: Publicar automáticamente en YouTube
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publicar == true) }}
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
+          WORKER_URL: https://fortaleza-youtube-auth.z44d2z597w.workers.dev
         run: |
-          echo "La publicación automática debe configurarse y probarse con el Worker antes de activarla."
-          echo "No se ha enviado el video para evitar publicaciones incorrectas."
+          set -euo pipefail
+
+          VIDEO=$(find output -maxdepth 1 -type f -name '*.mp4' | head -n 1)
+
+          if [ -z "$VIDEO" ]; then
+            echo "ERROR: No se encontró ningún video."
+            exit 1
+          fi
+
+          SIZE=$(stat -c%s "$VIDEO")
+          MAX_SIZE=$((90 * 1024 * 1024))
+
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "ERROR: El video supera el límite de 90 MB."
+            exit 1
+          fi
+
+          if [ -z "$FORTALEZA_UPLOAD_KEY" ]; then
+            echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
+            exit 1
+          fi
+
+          TITLE=$(python -c "import json; print(json.load(open('temp/guion_actual.json', encoding='utf-8'))['titulo'])")
+
+          DESCRIPTION=$(python -c "import json; g=json.load(open('temp/guion_actual.json', encoding='utf-8')); print(g['narracion'][:4500] + '\n\n#Shorts #Historias #FortalezaMediaAI')")
+
+          echo "Enviando video a YouTube..."
+
+          curl --fail-with-body --show-error --silent \
+            -X POST "$WORKER_URL/publicar" \
+            -H "Content-Type: video/mp4" \
+            -H "X-Fortaleza-Key: $FORTALEZA_UPLOAD_KEY" \
+            -H "X-Video-Title: $TITLE" \
+            -H "X-Video-Description: $DESCRIPTION" \
+            --data-binary "@$VIDEO"
+
+          echo "Solicitud de publicación completada."
