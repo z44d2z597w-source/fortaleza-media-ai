@@ -1,0 +1,45 @@
+{
+  "episodios": [
+    {
+      "titulo_serie": "Misterios inexplicables",
+      "titulo": "El mapa del guardián bajo la carretera",
+      "parte": 1,
+      "narracion": "¡No vas a creer lo que descubrieron bajo la carretera de San Miguel! Era una noche lluviosa cuando Ana, Luis y Carlos, cansados de la ruta, decidieron detenerse en la zona de los cerros. El motor de la vieja camioneta empezó a fallar y, al bajar, notaron una luz azul titilante entre los arbustos. Sin pensarlo mucho, siguieron la luminiscencia y llegaron a una abertura cubierta de musgo, como una grieta en la tierra que parecía no haber sido tocada en décadas. Dentro, el aire estaba helado y olía a tierra húmeda. Con la linterna de Luis, descubrieron un pasadizo de piedra, decorado con extraños símbolos que recordaban a los antiguos códices nahuas. Cada paso resonaba con ecos que no pertenecían a sus voces. De pronto, escucharon un susurro: “No deben estar aquí”. Los tres se miraron, el corazón a mil por hora, y siguieron adelante, impulsados por la curiosidad y el miedo. Al final del corredor, hallaron una cámara subterránea con paredes cubiertas de cristales que emitían destellos verdes. En el centro, una caja de madera tallada mostraba el mismo símbolo que habían visto al inicio. Cuando Ana la abrió, encontró dentro un mapa desgastado que señalaba varios puntos alrededor de la región, todos marcados con una X roja. En la parte inferior, una frase escrita con tinta negra: “El guardián despierta cuando el último sello se rompe”. De repente, el suelo tembló y una sombra cruzó la cámara, desapareciendo en la oscuridad. Los tres corrieron hacia la salida, pero al llegar a la superficie la lluvia había cesado y el cielo mostraba una extraña aurora que pintaba el horizonte de púrpura. Mientras empacaban la camioneta, Luis notó que su celular había grabado sin que él lo activara: una figura sin rostro se acercaba a la caja, tomando el mapa antes de desvanecerse. ¿Qué significa ese guardián? ¿Quién dejó el mapa? La respuesta quedó oculta, pero la última toma del video revela que el símbolo del guardián está tallado en la puerta de la casa de la abuela de Ana, preparando el terreno para el segundo episodio.",
+      "escenas": [
+        {
+          "texto": "¡No vas a creer lo que descubrieron bajo la carretera de San Miguel! Era una noche lluviosa cuando Ana, Luis y Carlos, cansados de la ruta, decidieron detenerse en la zona de los cerros.",
+          "visual": "Plano nocturno de una carretera rural bajo lluvia intensa. La camioneta vieja se detiene al costado; se ven faros apagados y el motor humeante. Los tres personajes bajan, envueltos en chaquetas mojadas."
+        },
+        {
+          "texto": "El motor empezó a fallar y, al bajar, notaron una luz azul titilante entre los arbustos. Sin pensarlo mucho, siguieron la luminiscencia y llegaron a una abertura cubierta de musgo.",
+          "visual": "Cámara sigue a los personajes mientras una pequeña luz azul parpadea entre la vegetación. La cámara se acerca a una grieta en la tierra cubierta de musgo, iluminada por la luz misteriosa."
+        },
+        {
+          "texto": "Dentro, el aire estaba helado y olía a tierra húmeda. Con la linterna de Luis, descubrieron un pasadizo de piedra decorado con símbolos nahuas.",
+          "visual": "Primer plano de la linterna atravesando un túnel de piedra húmeda. En las paredes aparecen grabados de estilo nahua iluminados brevemente por la luz."
+        },
+        {
+          "texto": "Al final del corredor hallaron una cámara subterránea con cristales verdes y una caja de madera tallada que contenía un mapa con X rojas.",
+          "visual": "La cámara se abre a una sala brillante; cristales verdes reflejan luces. En el centro, una caja rústica se abre mostrando un pergamino amarillento con marcas rojas."
+        },
+        {
+          "texto": "De repente, el suelo tembló y una sombra cruzó la cámara, desapareciendo en la oscuridad. Los tres corrieron hacia la salida.",
+          "visual": "Efecto de temblor en pantalla; una silueta oscura se desliza rápidamente por la pared y se desvanece. Los personajes salen corriendo, cámara temblorosa."
+        },
+        {
+          "texto": "Al llegar a la superficie la lluvia había cesado y el cielo mostraba una aurora púrpura. Luis vio que su celular grabó una figura sin rostro tomando el mapa.",
+          "visual": "Vista panorámica del cielo nocturno con aurora violeta. Pantalla del móvil muestra video de una figura etérea acercándose a la caja y tomando el mapa."
+        },
+        {
+          "texto": "La última toma revela el símbolo del guardián tallado en la puerta de la casa de la abuela de Ana, preparando el terreno para el segundo episodio.",
+          "visual": "Primer plano de una puerta de madera antigua; se ve tallado el mismo símbolo que apareció en la cueva, con luz tenue que resalta el detalle."
+        }
+      ],
+      "id": "e2e119f8dadfcd0f",
+      "fecha": "2026-11-10T15:51:50.152690+00:00"
+    }
+  ],
+  "temas": [
+    "Misterios inexplicables"
+  ]
+}

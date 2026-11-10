@@ -1,0 +1,83 @@
+[Script Info]
+Title: Fortaleza Media AI
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,68,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,4,2,2,70,70,430,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.77,Default,,0,0,0,,¡No vas a creer lo
+Dialogue: 0,0:00:01.77,0:00:03.53,Default,,0,0,0,,que descubrieron bajo la carretera
+Dialogue: 0,0:00:03.53,0:00:05.30,Default,,0,0,0,,de San Miguel! Era una
+Dialogue: 0,0:00:05.30,0:00:07.06,Default,,0,0,0,,noche lluviosa cuando Ana, Luis
+Dialogue: 0,0:00:07.06,0:00:08.83,Default,,0,0,0,,y Carlos, cansados de la
+Dialogue: 0,0:00:08.83,0:00:10.59,Default,,0,0,0,,ruta, decidieron detenerse en la
+Dialogue: 0,0:00:10.59,0:00:12.36,Default,,0,0,0,,zona de los cerros. El
+Dialogue: 0,0:00:12.36,0:00:14.12,Default,,0,0,0,,motor de la vieja camioneta
+Dialogue: 0,0:00:14.12,0:00:15.89,Default,,0,0,0,,empezó a fallar y, al
+Dialogue: 0,0:00:15.89,0:00:17.65,Default,,0,0,0,,bajar, notaron una luz azul
+Dialogue: 0,0:00:17.65,0:00:19.42,Default,,0,0,0,,titilante entre los arbustos. Sin
+Dialogue: 0,0:00:19.42,0:00:21.18,Default,,0,0,0,,pensarlo mucho, siguieron la luminiscencia
+Dialogue: 0,0:00:21.18,0:00:22.95,Default,,0,0,0,,y llegaron a una abertura
+Dialogue: 0,0:00:22.95,0:00:24.72,Default,,0,0,0,,cubierta de musgo, como una
+Dialogue: 0,0:00:24.72,0:00:26.48,Default,,0,0,0,,grieta en la tierra que
+Dialogue: 0,0:00:26.48,0:00:28.25,Default,,0,0,0,,parecía no haber sido tocada
+Dialogue: 0,0:00:28.25,0:00:30.01,Default,,0,0,0,,en décadas. Dentro, el aire
+Dialogue: 0,0:00:30.01,0:00:31.78,Default,,0,0,0,,estaba helado y olía a
+Dialogue: 0,0:00:31.78,0:00:33.54,Default,,0,0,0,,tierra húmeda. Con la linterna
+Dialogue: 0,0:00:33.54,0:00:35.31,Default,,0,0,0,,de Luis, descubrieron un pasadizo
+Dialogue: 0,0:00:35.31,0:00:37.07,Default,,0,0,0,,de piedra, decorado con extraños
+Dialogue: 0,0:00:37.07,0:00:38.84,Default,,0,0,0,,símbolos que recordaban a los
+Dialogue: 0,0:00:38.84,0:00:40.60,Default,,0,0,0,,antiguos códices nahuas. Cada paso
+Dialogue: 0,0:00:40.60,0:00:42.37,Default,,0,0,0,,resonaba con ecos que no
+Dialogue: 0,0:00:42.37,0:00:44.13,Default,,0,0,0,,pertenecían a sus voces. De
+Dialogue: 0,0:00:44.13,0:00:45.90,Default,,0,0,0,,pronto, escucharon un susurro: “No
+Dialogue: 0,0:00:45.90,0:00:47.67,Default,,0,0,0,,deben estar aquí”. Los tres
+Dialogue: 0,0:00:47.67,0:00:49.43,Default,,0,0,0,,se miraron, el corazón a
+Dialogue: 0,0:00:49.43,0:00:51.20,Default,,0,0,0,,mil por hora, y siguieron
+Dialogue: 0,0:00:51.20,0:00:52.96,Default,,0,0,0,,adelante, impulsados por la curiosidad
+Dialogue: 0,0:00:52.96,0:00:54.73,Default,,0,0,0,,y el miedo. Al final
+Dialogue: 0,0:00:54.73,0:00:56.49,Default,,0,0,0,,del corredor, hallaron una cámara
+Dialogue: 0,0:00:56.49,0:00:58.26,Default,,0,0,0,,subterránea con paredes cubiertas de
+Dialogue: 0,0:00:58.26,0:01:00.02,Default,,0,0,0,,cristales que emitían destellos verdes.
+Dialogue: 0,0:01:00.02,0:01:01.79,Default,,0,0,0,,En el centro, una caja
+Dialogue: 0,0:01:01.79,0:01:03.55,Default,,0,0,0,,de madera tallada mostraba el
+Dialogue: 0,0:01:03.55,0:01:05.32,Default,,0,0,0,,mismo símbolo que habían visto
+Dialogue: 0,0:01:05.32,0:01:07.08,Default,,0,0,0,,al inicio. Cuando Ana la
+Dialogue: 0,0:01:07.08,0:01:08.85,Default,,0,0,0,,abrió, encontró dentro un mapa
+Dialogue: 0,0:01:08.85,0:01:10.61,Default,,0,0,0,,desgastado que señalaba varios puntos
+Dialogue: 0,0:01:10.61,0:01:12.38,Default,,0,0,0,,alrededor de la región, todos
+Dialogue: 0,0:01:12.38,0:01:14.15,Default,,0,0,0,,marcados con una X roja.
+Dialogue: 0,0:01:14.15,0:01:15.91,Default,,0,0,0,,En la parte inferior, una
+Dialogue: 0,0:01:15.91,0:01:17.68,Default,,0,0,0,,frase escrita con tinta negra:
+Dialogue: 0,0:01:17.68,0:01:19.44,Default,,0,0,0,,“El guardián despierta cuando el
+Dialogue: 0,0:01:19.44,0:01:21.21,Default,,0,0,0,,último sello se rompe”. De
+Dialogue: 0,0:01:21.21,0:01:22.97,Default,,0,0,0,,repente, el suelo tembló y
+Dialogue: 0,0:01:22.97,0:01:24.74,Default,,0,0,0,,una sombra cruzó la cámara,
+Dialogue: 0,0:01:24.74,0:01:26.50,Default,,0,0,0,,desapareciendo en la oscuridad. Los
+Dialogue: 0,0:01:26.50,0:01:28.27,Default,,0,0,0,,tres corrieron hacia la salida,
+Dialogue: 0,0:01:28.27,0:01:30.03,Default,,0,0,0,,pero al llegar a la
+Dialogue: 0,0:01:30.03,0:01:31.80,Default,,0,0,0,,superficie la lluvia había cesado
+Dialogue: 0,0:01:31.80,0:01:33.56,Default,,0,0,0,,y el cielo mostraba una
+Dialogue: 0,0:01:33.56,0:01:35.33,Default,,0,0,0,,extraña aurora que pintaba el
+Dialogue: 0,0:01:35.33,0:01:37.10,Default,,0,0,0,,horizonte de púrpura. Mientras empacaban
+Dialogue: 0,0:01:37.10,0:01:38.86,Default,,0,0,0,,la camioneta, Luis notó que
+Dialogue: 0,0:01:38.86,0:01:40.63,Default,,0,0,0,,su celular había grabado sin
+Dialogue: 0,0:01:40.63,0:01:42.39,Default,,0,0,0,,que él lo activara: una
+Dialogue: 0,0:01:42.39,0:01:44.16,Default,,0,0,0,,figura sin rostro se acercaba
+Dialogue: 0,0:01:44.16,0:01:45.92,Default,,0,0,0,,a la caja, tomando el
+Dialogue: 0,0:01:45.92,0:01:47.69,Default,,0,0,0,,mapa antes de desvanecerse. ¿Qué
+Dialogue: 0,0:01:47.69,0:01:49.45,Default,,0,0,0,,significa ese guardián? ¿Quién dejó
+Dialogue: 0,0:01:49.45,0:01:51.22,Default,,0,0,0,,el mapa? La respuesta quedó
+Dialogue: 0,0:01:51.22,0:01:52.98,Default,,0,0,0,,oculta, pero la última toma
+Dialogue: 0,0:01:52.98,0:01:54.75,Default,,0,0,0,,del video revela que el
+Dialogue: 0,0:01:54.75,0:01:56.51,Default,,0,0,0,,símbolo del guardián está tallado
+Dialogue: 0,0:01:56.51,0:01:58.28,Default,,0,0,0,,en la puerta de la
+Dialogue: 0,0:01:58.28,0:02:00.05,Default,,0,0,0,,casa de la abuela de
+Dialogue: 0,0:02:00.05,0:02:01.81,Default,,0,0,0,,Ana, preparando el terreno para
+Dialogue: 0,0:02:01.81,0:02:03.58,Default,,0,0,0,,el segundo episodio.
