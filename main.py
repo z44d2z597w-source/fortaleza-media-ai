@@ -2,76 +2,93 @@
 import asyncio
 import json
 import sys
+import traceback
 from pathlib import Path
 
-from video_engine import obtener_guion_hoy
+from video_engine import (
+    obtener_guion_hoy,
+    registrar_guion_completado,
+)
 from render_short import renderizar_short
 
 
+CARPETA_SALIDA = Path("output")
 CARPETA_TEMP = Path("temp")
-CARPETA_TEMP.mkdir(exist_ok=True)
-
-
-def guardar_guion_actual(guion):
-    archivo = CARPETA_TEMP / "guion_actual.json"
-
-    temporal = CARPETA_TEMP / "guion_actual.tmp"
-
-    with open(temporal, "w", encoding="utf-8") as f:
-        json.dump(
-            guion,
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
-
-    temporal.replace(archivo)
-
-    print(f"[GUION] Guardado en {archivo}")
 
 
 async def main():
     print("==========================================")
     print("       FORTALEZA MEDIA AI")
-    print("       SISTEMA DE SHORTS 3.0")
+    print("       GENERADOR DE YOUTUBE SHORTS")
     print("==========================================")
 
     try:
-        print("\n[PASO 1] Generando historia...")
+        CARPETA_SALIDA.mkdir(exist_ok=True)
+        CARPETA_TEMP.mkdir(exist_ok=True)
+
+        print("\n[PASO 1] Generando historia original...")
 
         guion = obtener_guion_hoy()
 
-        if not guion:
-            raise RuntimeError("No se pudo generar el guion.")
-
         print(f"[SERIE] {guion['titulo_serie']}")
-        print(f"[TITULO] {guion['titulo']}")
         print(f"[EPISODIO] {guion['parte']} de 5")
+        print(f"[TÍTULO] {guion['titulo']}")
         print(f"[ESTILO] {guion['estilo_visual']}")
 
-        guardar_guion_actual(guion)
+        print("\n[PASO 2] Guardando información del guion...")
 
-        print("\n[PASO 2] Preparando narración y fondos...")
+        archivo_guion = CARPETA_TEMP / "guion_actual.json"
+
+        with open(
+            archivo_guion,
+            "w",
+            encoding="utf-8",
+        ) as archivo:
+            json.dump(
+                guion,
+                archivo,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+        print("\n[PASO 3] Creando video...")
 
         video = await renderizar_short(guion)
 
         if not video:
-            raise RuntimeError("El editor no devolvió un video.")
-
-        if not Path(video).exists():
             raise RuntimeError(
-                f"No se encontró el video generado: {video}"
+                "El renderizador no devolvió una ruta de video."
             )
 
+        ruta_video = Path(video)
+
+        if not ruta_video.exists():
+            raise RuntimeError(
+                "No se encontró el video terminado."
+            )
+
+        if ruta_video.stat().st_size < 100000:
+            raise RuntimeError(
+                "El archivo generado es demasiado pequeño."
+            )
+
+        print("\n[PASO 4] Registrando episodio completado...")
+
+        registrar_guion_completado(guion)
+
         print("\n==========================================")
-        print("[ÉXITO] SHORT GENERADO")
-        print(f"[VIDEO] {video}")
-        print(f"[ESTILO] {guion['estilo_visual']}")
+        print("       PROCESO COMPLETADO")
         print("==========================================")
+        print(f"TÍTULO: {guion['titulo']}")
+        print(f"VIDEO: {ruta_video}")
+        print("Episodio registrado correctamente.")
 
     except Exception as error:
-        print("\n[ERROR] EL PROCESO NO PUDO COMPLETARSE")
+        print("\n==========================================")
+        print("       ERROR EN EL PROCESO")
+        print("==========================================")
         print(str(error))
+        traceback.print_exc()
         sys.exit(1)
 
 
