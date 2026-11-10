@@ -1,3 +1,4 @@
+
 import os
 import json
 import random
@@ -8,6 +9,7 @@ from datetime import datetime, timezone
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 HISTORIAL = "historial.json"
+
 DURACION_OBJETIVO = 170
 
 TEMAS = [
@@ -21,12 +23,66 @@ TEMAS = [
     "Fenómenos inexplicables",
     "Leyendas urbanas",
     "Experimentos científicos",
+    "Historias sorprendentes",
+    "Casos de misterio",
+    "Historias de humor",
+    "Situaciones inesperadas",
+    "Curiosidades del mundo",
+    "Historias con finales inesperados",
 ]
+
+ESTILOS_VISUALES = {
+    "minecraft": {
+        "nombre": "Minecraft Parkour",
+        "busquedas": [
+            "minecraft parkour gameplay",
+            "minecraft parkour",
+            "minecraft jumping gameplay",
+        ],
+        "descripcion": "Gameplay de Minecraft Parkour dinámico, saltos y obstáculos."
+    },
+
+    "satisfactorio": {
+        "nombre": "Videos satisfactorios",
+        "busquedas": [
+            "satisfying kinetic sand",
+            "satisfying slime",
+            "satisfying cutting",
+            "oddly satisfying video",
+        ],
+        "descripcion": "Videos visualmente satisfactorios, movimientos y procesos hipnóticos."
+    },
+
+    "roblox": {
+        "nombre": "Roblox Obby",
+        "busquedas": [
+            "roblox obby gameplay",
+            "roblox obstacle course",
+            "obby gameplay",
+        ],
+        "descripcion": "Gameplay colorido de obstáculos, saltos y recorridos de Roblox."
+    },
+
+    "cinematico": {
+        "nombre": "Cinematográfico",
+        "busquedas": [
+            "cinematic dark mystery",
+            "cinematic abandoned places",
+            "dark cinematic atmosphere",
+            "cinematic suspense footage",
+        ],
+        "descripcion": "Imágenes cinematográficas, suspenso, lugares misteriosos y movimientos de cámara."
+    },
+}
 
 
 def cargar_historial():
     if not os.path.exists(HISTORIAL):
-        return {"episodios": [], "temas": []}
+        return {
+            "episodios": [],
+            "temas": [],
+            "estilos": []
+        }
 
     try:
         with open(HISTORIAL, "r", encoding="utf-8") as archivo:
@@ -37,24 +93,39 @@ def cargar_historial():
 
         datos.setdefault("episodios", [])
         datos.setdefault("temas", [])
+        datos.setdefault("estilos", [])
+
         return datos
 
     except Exception:
-        return {"episodios": [], "temas": []}
+        return {
+            "episodios": [],
+            "temas": [],
+            "estilos": []
+        }
 
 
 def guardar_historial(datos):
     temporal = HISTORIAL + ".tmp"
 
     with open(temporal, "w", encoding="utf-8") as archivo:
-        json.dump(datos, archivo, ensure_ascii=False, indent=2)
+        json.dump(
+            datos,
+            archivo,
+            ensure_ascii=False,
+            indent=2
+        )
 
     os.replace(temporal, HISTORIAL)
 
 
 def elegir_tema(historial):
     usados = historial.get("temas", [])
-    disponibles = [tema for tema in TEMAS if tema not in usados]
+
+    disponibles = [
+        tema for tema in TEMAS
+        if tema not in usados
+    ]
 
     if not disponibles:
         historial["temas"] = []
@@ -63,41 +134,109 @@ def elegir_tema(historial):
     return random.choice(disponibles)
 
 
-def crear_prompt(tema, episodio):
+def elegir_estilo_visual(historial):
+    estilos = list(ESTILOS_VISUALES.keys())
+
+    usados = historial.get("estilos", [])
+
+    # Evitar repetir los dos estilos más recientes.
+    recientes = usados[-2:]
+
+    disponibles = [
+        estilo for estilo in estilos
+        if estilo not in recientes
+    ]
+
+    if not disponibles:
+        disponibles = estilos.copy()
+
+    # Priorizar los estilos que menos se han utilizado.
+    conteos = {
+        estilo: usados.count(estilo)
+        for estilo in disponibles
+    }
+
+    minimo = min(conteos.values())
+
+    equilibrados = [
+        estilo for estilo in disponibles
+        if conteos[estilo] == minimo
+    ]
+
+    return random.choice(equilibrados)
+
+
+def crear_prompt(tema, episodio, estilo):
+    datos_estilo = ESTILOS_VISUALES[estilo]
+
     return f"""
 Crea un guion original en español mexicano para un YouTube Short.
 
-SERIE: {tema}
+TEMA: {tema}
 EPISODIO: {episodio} de 5
 
-REQUISITOS:
-- Narración natural, emocionante y fácil de entender.
-- Entre 300 y 360 palabras.
-- Comienza con una frase que atrape desde el primer segundo.
-- Mantén suspenso y curiosidad.
-- No repitas ideas ni frases.
-- Incluye detalles visuales para crear escenas.
-- Termina con un giro, revelación o suspenso.
-- Si es una historia ficticia, no la presentes como un caso real.
-- El episodio debe conectar con el siguiente.
-- No incluyas instrucciones para el editor.
+ESTILO VISUAL ASIGNADO:
+{datos_estilo["nombre"]}
 
-Responde exclusivamente con JSON válido usando esta estructura:
+DESCRIPCIÓN VISUAL:
+{datos_estilo["descripcion"]}
+
+DURACIÓN:
+- Entre 230 y 270 palabras.
+- Narración natural para aproximadamente 2 minutos.
+- No superar 178 segundos de audio.
+
+REGLAS PARA ATRAPAR A LA AUDIENCIA:
+
+1. Los primeros 3 segundos deben tener una frase impactante.
+2. No empieces con saludos ni presentaciones.
+3. Despierta curiosidad desde la primera frase.
+4. Mantén preguntas abiertas durante la narración.
+5. Introduce información nueva constantemente.
+6. Evita explicaciones largas y aburridas.
+7. Utiliza cambios de ritmo y tensión.
+8. Termina con una revelación, giro o pregunta que provoque comentarios.
+9. Cuando sea una serie, conecta con el siguiente episodio.
+10. No inventes casos reales ni presentes ficción como noticia.
+
+VARIEDAD DE CONTENIDO:
+
+Alterna entre:
+- Historias sorprendentes.
+- Misterios.
+- Curiosidades.
+- Suspenso.
+- Humor.
+- Datos inesperados.
+- Historias de supervivencia.
+- Giros inesperados.
+
+No repitas estructuras de narración de episodios anteriores.
+
+ESCENAS:
+
+- Incluye entre 6 y 8 escenas.
+- Cada escena debe tener una descripción visual concreta.
+- Las escenas deben acompañar lo que se está contando.
+- No pongas imágenes estáticas como instrucción visual.
+- No incluyas texto, subtítulos ni logotipos dentro de las escenas.
+
+Responde exclusivamente con JSON válido:
 
 {{
   "titulo_serie": "Nombre de la serie",
   "titulo": "Título atractivo del episodio",
   "parte": {episodio},
-  "narracion": "Texto completo de la narración",
+  "estilo_visual": "{estilo}",
+  "gancho": "Frase inicial impactante",
+  "narracion": "Narración completa",
   "escenas": [
     {{
       "texto": "Parte de la narración",
-      "visual": "Descripción detallada de lo que debe aparecer en pantalla"
+      "visual": "Descripción visual concreta para el fondo"
     }}
   ]
 }}
-
-Incluye entre 6 y 8 escenas.
 """
 
 
@@ -117,16 +256,23 @@ def consultar_groq(prompt):
         "messages": [
             {
                 "role": "system",
-                "content": "Eres un guionista profesional especializado en historias virales originales."
+                "content": (
+                    "Eres un guionista profesional de YouTube Shorts. "
+                    "Escribes historias originales en español mexicano, "
+                    "con ritmo rápido, ganchos fuertes y finales memorables. "
+                    "Respondes exclusivamente JSON válido."
+                )
             },
             {
                 "role": "user",
                 "content": prompt
             }
         ],
-        "temperature": 0.9,
+        "temperature": 0.95,
         "max_tokens": 3500,
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_object"
+        },
     }
 
     try:
@@ -134,11 +280,13 @@ def consultar_groq(prompt):
             url,
             headers=encabezados,
             json=datos,
-            timeout=60,
+            timeout=90,
         )
 
         respuesta.raise_for_status()
+
         contenido = respuesta.json()["choices"][0]["message"]["content"]
+
         return json.loads(contenido)
 
     except Exception as error:
@@ -146,53 +294,59 @@ def consultar_groq(prompt):
         return None
 
 
-def crear_guion_respaldo(tema, episodio):
-    titulo = f"El misterio que nadie ha podido explicar - Parte {episodio}"
+def crear_guion_respaldo(tema, episodio, estilo):
+    titulo = f"El misterio que nadie esperaba - Parte {episodio}"
 
     narracion = (
-        f"Hay historias que parecen imposibles, pero esta es una de esas que "
-        f"te hacen cuestionar todo. Hoy conocerás una historia sobre {tema.lower()}. "
-        f"Todo comenzó con un descubrimiento inesperado. Al principio, nadie le dio "
-        f'importancia, pero pronto aparecieron detalles que no tenían explicación. '
-        f"Los investigadores comenzaron a reunir información y encontraron "
-        f"contradicciones que cambiaron por completo lo que creían saber. "
-        f"Cada nueva pista abría otra pregunta. Y cuando parecía que finalmente "
-        f"habían encontrado una respuesta, apareció un detalle que nadie había "
-        f"notado. Lo más extraño es que ese detalle conectaba con algo ocurrido "
-        f"mucho tiempo atrás. Algunas personas creen que todo tiene una explicación "
-        f"lógica. Otras piensan que todavía falta descubrir la parte más importante. "
-        f"Por ahora, el misterio continúa abierto. Y lo que viene después podría "
-        f"cambiar la historia por completo."
+        f"Hay algo sobre {tema.lower()} que casi nadie conoce. "
+        "Todo comenzó con un descubrimiento que parecía insignificante. "
+        "Al principio, nadie pensó que aquello pudiera cambiar lo que "
+        "se sabía hasta ese momento. Pero cuando aparecieron nuevos "
+        "detalles, la situación se volvió mucho más extraña. "
+        "Las primeras explicaciones parecían tener sentido, hasta que "
+        "una pista inesperada puso todo de cabeza. "
+        "Algunas personas intentaron encontrar una respuesta sencilla, "
+        "pero cada explicación abría una pregunta todavía más difícil. "
+        "Lo curioso es que un pequeño detalle había estado frente a "
+        "todos desde el principio. Nadie lo había relacionado con el "
+        "resto de la historia. Cuando finalmente apareció esa conexión, "
+        "todo comenzó a verse diferente. "
+        "Y aquí viene lo más sorprendente: todavía existe una parte "
+        "de esta historia que no tiene una explicación definitiva. "
+        "Tal vez la respuesta sea más sencilla de lo que parece. "
+        "O tal vez apenas estamos descubriendo el principio. "
+        "Porque lo que ocurrió después podría cambiar completamente "
+        "la manera de entender este misterio."
     )
 
     escenas = [
         {
-            "texto": "Todo comenzó con un descubrimiento inesperado.",
-            "visual": f"Escena cinematográfica misteriosa relacionada con {tema}"
+            "texto": "Todo comenzó con un descubrimiento.",
+            "visual": f"Descubrimiento relacionado con {tema}, plano dinámico."
         },
         {
-            "texto": "Al principio, nadie le dio importancia.",
-            "visual": "Lugar vacío, ambiente inquietante, iluminación dramática"
+            "texto": "Nadie pensó que aquello pudiera cambiarlo todo.",
+            "visual": "Escena de sorpresa y reacción ante un descubrimiento."
         },
         {
-            "texto": "Aparecieron detalles que no tenían explicación.",
-            "visual": "Primer plano de documentos, fotografías y pistas"
+            "texto": "Aparecieron nuevos detalles.",
+            "visual": "Primeros planos de pistas y objetos relacionados con la historia."
         },
         {
-            "texto": "Los investigadores comenzaron a reunir información.",
-            "visual": "Investigadores examinando evidencias en una habitación"
+            "texto": "Una pista inesperada puso todo de cabeza.",
+            "visual": "Revelación visual dramática y movimiento de cámara."
         },
         {
-            "texto": "Cada nueva pista abría otra pregunta.",
-            "visual": "Montaje cinematográfico de pistas y objetos misteriosos"
+            "texto": "Un pequeño detalle había estado frente a todos.",
+            "visual": "Acercamiento a un detalle oculto."
         },
         {
-            "texto": "Apareció un detalle que nadie había notado.",
-            "visual": "Primer plano de un objeto oculto entre las evidencias"
+            "texto": "Todo comenzó a verse diferente.",
+            "visual": "Montaje visual de la revelación."
         },
         {
-            "texto": "El misterio continúa abierto.",
-            "visual": "Paisaje oscuro y misterioso con cámara alejándose"
+            "texto": "La historia todavía no termina.",
+            "visual": "Escena final intrigante que deja una pregunta abierta."
         },
     ]
 
@@ -200,6 +354,8 @@ def crear_guion_respaldo(tema, episodio):
         "titulo_serie": tema,
         "titulo": titulo,
         "parte": episodio,
+        "estilo_visual": estilo,
+        "gancho": "Hay algo sobre esta historia que casi nadie conoce.",
         "narracion": narracion,
         "escenas": escenas,
     }
@@ -209,7 +365,13 @@ def validar_guion(guion):
     if not isinstance(guion, dict):
         return False
 
-    campos = ["titulo_serie", "titulo", "parte", "narracion", "escenas"]
+    campos = [
+        "titulo_serie",
+        "titulo",
+        "parte",
+        "narracion",
+        "escenas",
+    ]
 
     if not all(campo in guion for campo in campos):
         return False
@@ -217,7 +379,9 @@ def validar_guion(guion):
     if not isinstance(guion["narracion"], str):
         return False
 
-    if len(guion["narracion"].split()) < 80:
+    palabras = len(guion["narracion"].split())
+
+    if palabras < 80 or palabras > 300:
         return False
 
     if not isinstance(guion["escenas"], list):
@@ -245,41 +409,80 @@ def obtener_guion_hoy():
         ultimo = episodios[-1]
 
         if ultimo.get("parte", 0) < 5:
-            tema = ultimo.get("titulo_serie", "Misterios inexplicables")
+            tema = ultimo.get(
+                "titulo_serie",
+                "Misterios inexplicables"
+            )
+
             episodio = ultimo.get("parte", 0) + 1
+
         else:
             tema = elegir_tema(historial)
             episodio = 1
+
     else:
         tema = elegir_tema(historial)
         episodio = 1
 
-    prompt = crear_prompt(tema, episodio)
+    estilo = elegir_estilo_visual(historial)
+
+    prompt = crear_prompt(
+        tema,
+        episodio,
+        estilo
+    )
+
     guion = consultar_groq(prompt)
 
     if not validar_guion(guion):
         print("[AVISO] Usando guion de respaldo.")
-        guion = crear_guion_respaldo(tema, episodio)
 
+        guion = crear_guion_respaldo(
+            tema,
+            episodio,
+            estilo
+        )
+
+    # El estilo elegido por el sistema siempre tiene prioridad.
+    guion["estilo_visual"] = estilo
     guion["parte"] = episodio
 
+    guion.setdefault(
+        "gancho",
+        guion["narracion"].split(".")[0]
+    )
+
     identificador = hashlib.sha256(
-        f"{guion['titulo_serie']}-{guion['titulo']}-{episodio}".encode("utf-8")
+        (
+            f"{guion['titulo_serie']}-"
+            f"{guion['titulo']}-"
+            f"{episodio}"
+        ).encode("utf-8")
     ).hexdigest()[:16]
 
     guion["id"] = identificador
-    guion["fecha"] = datetime.now(timezone.utc).isoformat()
+
+    guion["fecha"] = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     historial.setdefault("episodios", []).append(guion)
     historial.setdefault("temas", [])
+    historial.setdefault("estilos", [])
 
     if tema not in historial["temas"]:
         historial["temas"].append(tema)
 
+    historial["estilos"].append(estilo)
+
     historial["episodios"] = historial["episodios"][-100:]
+    historial["temas"] = historial["temas"][-100:]
+    historial["estilos"] = historial["estilos"][-100:]
+
     guardar_historial(historial)
 
     print(f"[GUION] {guion['titulo']}")
     print(f"[SERIE] {guion['titulo_serie']} - Parte {episodio}")
+    print(f"[ESTILO VISUAL] {ESTILOS_VISUALES[estilo]['nombre']}")
 
     return guion
