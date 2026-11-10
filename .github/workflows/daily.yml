@@ -1,89 +1,87 @@
-name: FORTALEZA MEDIA AI
+name: FORTALEZA MEDIA AI - SHORTS DIARIOS
+
 on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: 'Publicar en YouTube (true/false)'
-        required: false
-        default: false
+        description: "Publicar automáticamente en YouTube"
+        required: true
         type: boolean
+        default: false
+
   schedule:
-    - cron: '0 15 * * *'
+    - cron: "0 15 * * *"
 
 permissions:
   contents: write
 
+concurrency:
+  group: fortaleza-media-ai
+  cancel-in-progress: false
+
 jobs:
-  producir:
+  generar:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
         with:
-          python-version: '3.12'
+          ref: main
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
       - name: Instalar dependencias
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
-      - name: Generar Video (Capítulo del Día)
+
+      - name: Restaurar historial
+        uses: actions/cache@v4
+        with:
+          path: |
+            historial.json
+            fondos_usados.json
+          key: fortaleza-historial-${{ github.run_id }}
+          restore-keys: |
+            fortaleza-historial-
+
+      - name: Generar Short
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: python main.py
-
-      - name: Guardar Memoria y Progreso
-        if: always()
-        continue-on-error: true
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          [ -f historial_creativo.json ] && git add historial_creativo.json
-          [ -f estado_serie.json ] && git add estado_serie.json
-          [ -f guion_serie.json ] && git add guion_serie.json
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Auto-mejora: Progreso de serie actualizado [skip ci]"
+          python main.py
+
+      - name: Guardar historial
+        if: success()
+        run: |
+          git config user.name "Fortaleza Media AI"
+          git config user.email "actions@github.com"
+          git add historial.json fondos_usados.json
+          git diff --cached --quiet || git commit -m "Actualizar historial de generación"
           git push
 
-      - name: Preparar Metadatos
-        run: |
-          python - <<'PY'
-          import json, os
-          with open("guion.json", encoding="utf-8") as f: 
-              g = json.load(f)
-          
-          titulo = f"{g['titulo_serie']} - Parte {g['parte']}"
-          desc = g["narracion"][:200] + " #Shorts #Misterio #Serie"
-          
-          delim = "FORTALEZA_" + str(os.getpid())
-          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
-              f.write(f"VIDEO_TITLE<<{delim}\n{titulo}\n{delim}\n")
-              f.write(f"VIDEO_DESC<<{delim}\n{desc}\n{delim}\n")
-          PY
-
-      - name: Subir Artefacto (Para TikTok)
+      - name: Guardar video generado
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: VIDEO-DEL-DIA
-          path: output/fortaleza_short.mp4
+          name: fortaleza-media-ai-video
+          path: output/*.mp4
+          if-no-files-found: warn
           retention-days: 7
 
-      - name: Publicar en YouTube Shorts
-        if: |
-          github.event_name == 'schedule' || 
-          github.event.inputs.publicar == 'true' || 
-          github.event.inputs.publicar == true
+      - name: Publicar en YouTube
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publicar == true }}
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
-          VIDEO_TITLE: ${{ env.VIDEO_TITLE }}
-          VIDEO_DESCRIPTION: ${{ env.VIDEO_DESC }}
         run: |
-          set -e
-          VIDEO="output/fortaleza_short.mp4"
-          if [ ! -s "$VIDEO" ]; then echo "No hay video, saltando."; exit 0; fi
-          curl -sS -f -X POST "https://fortaleza-youtube-auth.z44d2z597w.workers.dev/publicar" \
-            -H "X-Fortaleza-Key: ${FORTALEZA_UPLOAD_KEY}" -H "Content-Type: video/mp4" \
-            -H "X-Video-Title: ${VIDEO_TITLE}" -H "X-Video-Description: ${VIDEO_DESCRIPTION}" \
-            --data-binary "@${VIDEO}"
+          echo "La publicación automática debe configurarse y probarse con el Worker antes de activarla."
+          echo "No se ha enviado el video para evitar publicaciones incorrectas."
