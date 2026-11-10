@@ -1,85 +1,121 @@
-# FORTALEZA MEDIA AI 2.0
 
-Sistema automatizado para crear YouTube Shorts mediante inteligencia artificial.
+# FORTALEZA MEDIA AI
 
-## Características
+Sistema automatizado para crear, renderizar y publicar YouTube Shorts con inteligencia artificial.
 
-- Generación de historias originales.
-- Series de 5 episodios conectados.
-- Guiones en español mexicano.
-- Inteligencia artificial mediante Groq.
-- Sistema de respaldo para generar guiones.
-- Narración con Edge TTS.
-- Voz mexicana.
-- Fondos de video de Pixabay.
-- Generación de imágenes con Pollinations.
-- Escenas con movimiento mediante FFmpeg.
+## 1. Características
+
+- Historias originales en español mexicano.
+- Series de hasta 5 episodios.
+- Ganchos fuertes al inicio y giros al final.
+- Cuatro estilos visuales alternados:
+  - Minecraft Parkour.
+  - Videos satisfactorios.
+  - Roblox Obby.
+  - Cinematográfico.
+- Narración con voces mexicanas de Edge TTS.
+- Videos verticales 1080x1920.
+- 30 FPS.
 - Subtítulos automáticos.
-- Formato vertical 1080x1920.
-- Resolución de 30 FPS.
-- Duración máxima de 178 segundos.
-- Historial para evitar repetir fondos.
+- Renderizado con FFmpeg.
+- Historial de temas y fondos utilizados.
 - Generación automática mediante GitHub Actions.
+- Publicación pública en YouTube mediante Cloudflare Worker.
 
-## Archivos principales
+## 2. Archivos principales
 
-- main.py: inicia todo el proceso.
-- video_engine.py: genera las historias.
-- render_short.py: crea los videos.
-- requirements.txt: dependencias.
-- .github/workflows/daily.yml: automatización diaria.
+- `main.py`: inicia la generación.
+- `video_engine.py`: crea las historias y administra los estilos.
+- `render_short.py`: genera el video.
+- `requirements.txt`: dependencias de Python.
+- `worker.js`: autorización y publicación en YouTube.
+- `wrangler.toml`: configuración del Worker.
+- `.github/workflows/daily.yml`: automatización.
 
-## Configuración de secretos
+## 3. Secretos de GitHub
 
-En GitHub entra a:
+Entra al repositorio y abre:
 
 Settings > Secrets and variables > Actions
 
-Agrega:
+Agrega estos secretos:
 
-GROQ_API_KEY
-PIXABAY_API_KEY
-FORTALEZA_UPLOAD_KEY
+- `GROQ_API_KEY`
+- `PIXABAY_API_KEY`
+- `FORTALEZA_UPLOAD_KEY`
 
-No compartas estos secretos públicamente.
+No publiques ni compartas los valores de estos secretos.
 
-## Servicios
+## 4. Configuración de Cloudflare
 
-Groq:
-https://console.groq.com/
+En el Worker `fortaleza-youtube-auth`, configura estas variables secretas:
 
-Pixabay:
-https://pixabay.com/api/docs/
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `FORTALEZA_UPLOAD_KEY`
 
-Pollinations:
-https://pollinations.ai/
+El valor de `FORTALEZA_UPLOAD_KEY` debe coincidir con el secreto de GitHub.
 
-## Generación manual
+También debe estar configurado el espacio KV:
 
-1. Entra a la pestaña Actions.
-2. Selecciona FORTALEZA MEDIA AI - SHORTS DIARIOS.
+`YOUTUBE_TOKENS`
+
+El archivo `wrangler.toml` contiene el identificador del espacio KV.
+
+## 5. Autorización de YouTube
+
+La dirección de autorización es:
+
+https://fortaleza-youtube-auth.z44d2z597w.workers.dev/login
+
+Antes de autorizar, registra esta URI de redirección en Google Cloud:
+
+https://fortaleza-youtube-auth.z44d2z597w.workers.dev/callback
+
+El proyecto de Google debe tener habilitada la API de YouTube Data API v3 y el acceso OAuth correspondiente.
+
+## 6. Generación automática
+
+El flujo de GitHub Actions ejecuta el sistema diariamente a las 9:00 a. m. (hora de San Luis Potosí).
+
+Para ejecutarlo manualmente:
+
+1. Abre la pestaña Actions.
+2. Selecciona FORTALEZA MEDIA AI - SHORTS AUTOMATICOS.
 3. Presiona Run workflow.
-4. Mantén la publicación desactivada.
-5. Ejecuta el proceso.
-6. Espera a que termine.
-7. Descarga el artefacto del video.
+4. Ejecuta el proceso.
 
-## Publicación
+La opción de publicación está activada por defecto.
 
-La publicación automática todavía requiere configurar y verificar el Worker de YouTube.
+## 7. Publicación en YouTube
 
-No activar la publicación hasta comprobar que el video generado es correcto.
+La publicación utiliza el Worker de Cloudflare.
 
-## Formato de salida
+El sistema envía:
 
-Resolución: 1080 x 1920.
-FPS: 30.
-Formato: MP4.
-Códec: H.264.
-Audio: AAC.
-Duración máxima: 178 segundos.
+- Video MP4.
+- Título.
+- Descripción.
+- Clave privada de autorización.
 
-## Importante
+El Worker solicita un token de acceso a Google y envía el video a YouTube con privacidad pública.
 
-Los servicios externos pueden tener límites, cambios o interrupciones.
-La generación de imágenes, videos y guiones depende de su disponibilidad.
+La publicación depende de que OAuth, Cloudflare y YouTube estén correctamente configurados.
+
+## 8. Formato de salida
+
+- Resolución: 1080 x 1920.
+- Orientación: vertical 9:16.
+- FPS: 30.
+- Formato: MP4.
+- Códec de video: H.264.
+- Audio: AAC.
+- Duración máxima del sistema: 178 segundos.
+
+## 9. Importante
+
+Los fondos de Pixabay dependen de los resultados disponibles en su catálogo. Las búsquedas no garantizan que todos los clips sean gameplay auténtico de Minecraft o Roblox.
+
+La inteligencia artificial puede producir resultados variables. Se recomienda revisar las primeras ejecuciones y comprobar que el video, el audio y los subtítulos estén correctos.
+
+No compartas claves API, tokens OAuth ni credenciales privadas.
