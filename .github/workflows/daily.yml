@@ -1,14 +1,8 @@
 
-name: FORTALEZA MEDIA AI - SHORTS DIARIOS
+name: FORTALEZA MEDIA AI - SHORTS AUTOMATICOS
 
 on:
   workflow_dispatch:
-    inputs:
-      publicar:
-        description: "Publicar el video en YouTube"
-        required: true
-        type: boolean
-        default: false
 
   schedule:
     - cron: "0 15 * * *"
@@ -21,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generar:
+  generar_y_publicar:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -58,8 +52,7 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        run: |
-          python main.py
+        run: python main.py
 
       - name: Guardar historial
         if: success()
@@ -67,7 +60,7 @@ jobs:
           git config user.name "Fortaleza Media AI"
           git config user.email "actions@github.com"
           git add historial.json fondos_usados.json
-          git diff --cached --quiet || git commit -m "Actualizar historial de generación"
+          git diff --cached --quiet || git commit -m "Actualizar historial"
           git push
 
       - name: Guardar video generado
@@ -80,7 +73,7 @@ jobs:
           retention-days: 7
 
       - name: Publicar automáticamente en YouTube
-        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publicar == true) }}
+        if: success()
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           WORKER_URL: https://fortaleza-youtube-auth.z44d2z597w.workers.dev
@@ -90,15 +83,15 @@ jobs:
           VIDEO=$(find output -maxdepth 1 -type f -name '*.mp4' | head -n 1)
 
           if [ -z "$VIDEO" ]; then
-            echo "ERROR: No se encontró ningún video."
+            echo "ERROR: No se encontró el video."
             exit 1
           fi
 
           SIZE=$(stat -c%s "$VIDEO")
           MAX_SIZE=$((90 * 1024 * 1024))
 
-          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
-            echo "ERROR: El video supera el límite de 90 MB."
+          if [ "$SIZE" -le 0 ] || [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "ERROR: Tamaño de video inválido o superior a 90 MB."
             exit 1
           fi
 
@@ -107,18 +100,20 @@ jobs:
             exit 1
           fi
 
-          TITLE=$(python -c "import json; print(json.load(open('temp/guion_actual.json', encoding='utf-8'))['titulo'])")
+          TITLE=$(python -c "import json; print(json.load(open('temp/guion_actual.json', encoding='utf-8'))['titulo'].replace('\n',' ').strip()[:100])")
 
-          DESCRIPTION=$(python -c "import json; g=json.load(open('temp/guion_actual.json', encoding='utf-8')); print(g['narracion'][:4500] + '\n\n#Shorts #Historias #FortalezaMediaAI')")
+          DESCRIPTION=$(python -c "import json; g=json.load(open('temp/guion_actual.json', encoding='utf-8')); print(' '.join(g['narracion'].split())[:4400] + ' #Shorts #Historias #FortalezaMediaAI')")
 
-          echo "Enviando video a YouTube..."
+          echo "Publicando automáticamente: $TITLE"
 
-          curl --fail-with-body --show-error --silent \
+          RESPONSE=$(curl --fail-with-body --show-error --silent \
             -X POST "$WORKER_URL/publicar" \
             -H "Content-Type: video/mp4" \
             -H "X-Fortaleza-Key: $FORTALEZA_UPLOAD_KEY" \
             -H "X-Video-Title: $TITLE" \
             -H "X-Video-Description: $DESCRIPTION" \
-            --data-binary "@$VIDEO"
+            --data-binary "@$VIDEO")
 
-          echo "Solicitud de publicación completada."
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | python -c "import json,sys; r=json.load(sys.stdin); assert r.get('success') is True, r.get('error', 'Publicación no confirmada'); print('PUBLICADO:', r.get('url'))"
