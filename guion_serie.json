@@ -1,0 +1,35 @@
+{
+    "titulo_serie": "Sombras del Reloj",
+    "episodios": [
+        {
+            "parte": 1,
+            "titulo_episodio": "El Reloj Detenido",
+            "narracion": "En el corazón del pueblo de Valverde, el viejo reloj de la torre se ha detenido exactamente a la medianoche, sin que nadie lo haya tocado. Los aldeanos despiertan con la sensación de que el tiempo se ha congelado; las campanas suenan una sola vez y luego el silencio se vuelve abrumador. Marta, la joven bibliotecaria, descubre una nota arrugada bajo el péndulo: \"Cuando el tiempo se quiebre, la verdad emergerá\". Mientras revisa los archivos del ayuntamiento, una sombra se desliza entre los pilares de la torre, desapareciendo antes de que pueda ser vista claramente. El corazón de Marta late con fuerza al escuchar un leve tic que parece venir de dentro de su propio pecho. ¿Qué fuerza invisible controla el tiempo de Valverde?",
+            "prompt_visual": "A misty old town square at night with a large stopped clock tower, faint glow, mysterious shadow looming, cinematic atmosphere"
+        },
+        {
+            "parte": 2,
+            "titulo_episodio": "La Carta sin Remitente",
+            "narracion": "Al día siguiente, Marta recibe una carta sin remitente, escrita con tinta negra que parece absorber la luz. El mensaje es breve: \"El reloj no es el guardián, es la llave. Busca el espejo que refleja lo que nunca fue visto\". Intrigada, recorre el archivo del museo y encuentra un espejo tallado en madera, cubierto de polvo y con un marco de hierro oxidado. Cuando lo limpia, el reflejo muestra la torre del reloj, pero con una figura encapuchada detrás de ella, invisible a simple vista. De pronto, el espejo vibra y una voz susurra: \"No mires atrás, pero el pasado ya está aquí\". Marta siente que el espejo está a punto de romperse, como si algo intentara salir de él. ¿Qué entidad se oculta tras el reflejo?",
+            "prompt_visual": "An ancient wooden mirror with an ornate iron frame, foggy reflection showing a hidden cloaked figure behind a clock tower, dim lighting"
+        },
+        {
+            "parte": 3,
+            "titulo_episodio": "El Eco del Pasado",
+            "narracion": "Esa noche, el eco del tic del reloj retumba en la casa de Marta, aunque el mecanismo sigue inmóvil. Siguiendo el sonido, llega al sótano donde descubre una puerta secreta bajo una losa de piedra. Al abrirla, una corriente de aire frío revela una habitación subterránea llena de relojes rotos y una vieja caja de música que comienza a sonar sola, interpretando una melodía que nadie reconoce. Dentro de la caja, un pergamino enrollado habla de una maldición que ató al pueblo a un momento de sufrimiento hace siglos. De repente, la melodía se detiene y el tic del reloj se vuelve más fuerte, como si el tiempo intentara romper la barrera. Una mano esquelética emerge de la sombra, agarrando el borde de la caja. ¿Quién o qué ha despertado bajo Valverde?",
+            "prompt_visual": "A dim underground chamber filled with broken clocks, a vintage music box playing, a skeletal hand reaching out from darkness, eerie atmosphere"
+        },
+        {
+            "parte": 4,
+            "titulo_episodio": "La Puerta del Olvido",
+            "narracion": "Marta, temblorosa, lleva el pergamino al anciano guardián del farol, Don Luis, quien revela que la puerta que han encontrado es la \"Puerta del Olvido\", sellada por los fundadores para atrapar a una entidad que se alimenta del tiempo. Según la leyenda, solo el corazón puro puede cerrar la grieta antes de que el tic se convierta en un grito eterno. Deciden regresar al sótano al amanecer, pero al llegar descubren que la puerta está abierta y una niebla negra fluye hacia la superficie, arrastrando objetos y recuerdos de los aldeanos. Los relojes del pueblo comienzan a girar al revés, y la gente siente que sus memorias se desvanecen. Marta escucha un susurro que dice: \"No hay vuelta atrás\". En el último segundo, una luz cegadora sale de la puerta. ¿Logrará Marta cerrar la grieta a tiempo?",
+            "prompt_visual": "An ominous open ancient door in a dark underground, black fog spilling out, clocks spinning backwards, a blinding light emerging"
+        },
+        {
+            "parte": 5,
+            "titulo_episodio": "El Último Tic",
+            "narracion": "Con la niebla consumiendo el pueblo, Marta corre hacia la torre del reloj, donde la energía de la puerta parece converger. En la cima, el péndulo gigante está suspendido en el aire, vibrando con una fuerza sobrenatural. Marta coloca el espejo frente al péndulo y, al reflejar la luz de la luna, la figura encapuchada aparece claramente: es el propio fundador del pueblo, atrapado entre los siglos, condenado a vigilar el tiempo. Él le entrega una llave de bronce y susurra: \"Solo el sacrificio de un latido puede sellar la ruptura\". Marta siente su corazón latir con un ritmo distinto, y al girar la llave, el tic del reloj se vuelve un golpe final que resuena en todo Valverde. La niebla se disipa, pero un último eco persiste en la torre, como un susurro que se niega a morir. ¿Qué legado queda tras el último tic?",
+            "prompt_visual": "A moonlit clock tower interior with a suspended pendulum, a reflective mirror showing a cloaked founder, a bronze key, dramatic lighting, lingering mist"
+        }
+    ]
+}
