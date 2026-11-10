@@ -3,6 +3,12 @@ name: FORTALEZA MEDIA AI - SHORTS AUTOMATICOS
 
 on:
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar en YouTube (true/false)"
+        required: false
+        type: boolean
+        default: true
 
   schedule:
     - cron: "0 15 * * *"
@@ -59,7 +65,7 @@ jobs:
         run: |
           git config user.name "Fortaleza Media AI"
           git config user.email "actions@github.com"
-          git add historial.json fondos_usados.json
+          git add -A
           git diff --cached --quiet || git commit -m "Actualizar historial"
           git push
 
@@ -73,7 +79,7 @@ jobs:
           retention-days: 7
 
       - name: Publicar automáticamente en YouTube
-        if: success()
+        if: success() && (github.event_name == 'schedule' || inputs.publicar)
         env:
           FORTALEZA_UPLOAD_KEY: ${{ secrets.FORTALEZA_UPLOAD_KEY }}
           WORKER_URL: https://fortaleza-youtube-auth.z44d2z597w.workers.dev
