@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       publicar:
-        description: "Publicar en YouTube (true/false)"
+        description: "Publicar en YouTube automáticamente"
         required: false
         type: boolean
         default: true
@@ -23,7 +23,7 @@ concurrency:
 jobs:
   generar_y_publicar:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       - name: Descargar repositorio
@@ -44,15 +44,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Restaurar historial
-        uses: actions/cache@v4
-        with:
-          path: |
-            historial.json
-            fondos_usados.json
-          key: fortaleza-historial-${{ github.run_id }}
-          restore-keys: |
-            fortaleza-historial-
+      - name: Verificar herramientas
+        run: |
+          python --version
+          ffmpeg -version
+          ffprobe -version
 
       - name: Generar Short
         env:
@@ -60,20 +56,83 @@ jobs:
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
         run: python main.py
 
+      - name: Verificar video generado
+        run: |
+          set -euo pipefail
+
+          VIDEO=$(find output -maxdepth 1 -type f -name '*.mp4' | head -n 1)
+
+          if [ -z "$VIDEO" ]; then
+            echo "ERROR: No se encontró ningún video."
+            exit 1
+          fi
+
+          if [ ! -s "$VIDEO" ]; then
+            echo "ERROR: El video está vacío."
+            exit 1
+          fi
+
+          echo "VIDEO=$VIDEO" >> "$GITHUB_ENV"
+          echo "Video encontrado: $VIDEO"
+          ls -lh "$VIDEO"
+
+      - name: Preparar metadatos
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          with open(
+              "temp/guion_actual.json",
+              encoding="utf-8"
+          ) as archivo:
+              guion = json.load(archivo)
+
+          titulo = " ".join(
+              str(guion.get("titulo", "Fortaleza Media AI")).split()
+          )[:100]
+
+          descripcion = " ".join(
+              str(guion.get("narracion", "")).split()
+          )[:400]
+
+          descripcion += " #Shorts #Historias #FortalezaMediaAI"
+
+          with open(
+              os.environ["GITHUB_ENV"],
+              "a",
+              encoding="utf-8"
+          ) as archivo:
+              archivo.write(f"VIDEO_TITLE={titulo}\n")
+              archivo.write(f"VIDEO_DESCRIPTION={descripcion}\n")
+          PY
+
       - name: Guardar historial
         if: success()
         run: |
+          set -e
+
           git config user.name "Fortaleza Media AI"
           git config user.email "actions@github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "Actualizar historial"
-          git push
+
+          for archivo in historial.json fondos_usados.json; do
+            if [ -f "$archivo" ]; then
+              git add "$archivo"
+            fi
+          done
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios en el historial."
+          else
+            git commit -m "Actualizar historial de Shorts [skip ci]"
+            git push
+          fi
 
       - name: Guardar video generado
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fortaleza-media-ai-video
+          name: FORTALEZA-MEDIA-AI-SHORT
           path: output/*.mp4
           if-no-files-found: warn
           retention-days: 7
@@ -86,10 +145,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          VIDEO=$(find output -maxdepth 1 -type f -name '*.mp4' | head -n 1)
+          if [ -z "${FORTALEZA_UPLOAD_KEY:-}" ]; then
+            echo "ERROR: Falta el secreto FORTALEZA_UPLOAD_KEY."
+            exit 1
+          fi
 
-          if [ -z "$VIDEO" ]; then
-            echo "ERROR: No se encontró el video."
+          if [ ! -s "$VIDEO" ]; then
+            echo "ERROR: No existe el video para publicar."
             exit 1
           fi
 
@@ -97,29 +159,27 @@ jobs:
           MAX_SIZE=$((90 * 1024 * 1024))
 
           if [ "$SIZE" -le 0 ] || [ "$SIZE" -gt "$MAX_SIZE" ]; then
-            echo "ERROR: Tamaño de video inválido o superior a 90 MB."
+            echo "ERROR: El video supera el límite de 90 MB o está vacío."
             exit 1
           fi
 
-          if [ -z "$FORTALEZA_UPLOAD_KEY" ]; then
-            echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
-            exit 1
-          fi
-
-          TITLE=$(python -c "import json; print(json.load(open('temp/guion_actual.json', encoding='utf-8'))['titulo'].replace('\n',' ').strip()[:100])")
-
-          DESCRIPTION=$(python -c "import json; g=json.load(open('temp/guion_actual.json', encoding='utf-8')); print(' '.join(g['narracion'].split())[:4400] + ' #Shorts #Historias #FortalezaMediaAI')")
-
-          echo "Publicando automáticamente: $TITLE"
+          echo "Publicando: $VIDEO"
+          echo "Título: $VIDEO_TITLE"
 
           RESPONSE=$(curl --fail-with-body --show-error --silent \
             -X POST "$WORKER_URL/publicar" \
             -H "Content-Type: video/mp4" \
             -H "X-Fortaleza-Key: $FORTALEZA_UPLOAD_KEY" \
-            -H "X-Video-Title: $TITLE" \
-            -H "X-Video-Description: $DESCRIPTION" \
+            -H "X-Video-Title: $VIDEO_TITLE" \
+            -H "X-Video-Description: $VIDEO_DESCRIPTION" \
             --data-binary "@$VIDEO")
 
           echo "$RESPONSE"
 
-          echo "$RESPONSE" | python -c "import json,sys; r=json.load(sys.stdin); assert r.get('success') is True, r.get('error', 'Publicación no confirmada'); print('PUBLICADO:', r.get('url'))"
+          echo "$RESPONSE" | python -c "
+          import json, sys
+          respuesta = json.load(sys.stdin)
+          assert respuesta.get('success') is True, respuesta.get('error', 'Publicación no confirmada')
+          print('PUBLICACIÓN CONFIRMADA')
+          print(respuesta.get('url', ''))
+          "
