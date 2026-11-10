@@ -77,12 +77,53 @@
       ],
       "id": "2a6e91f847d4dbe0",
       "fecha": "2026-11-10T16:16:09.431194+00:00"
+    },
+    {
+      "titulo_serie": "Misterios inexplicables",
+      "titulo": "Luces desaparecidas en la Cordillera del Paine",
+      "parte": 3,
+      "estilo_visual": "cinematico",
+      "gancho": "¿Sabías que en la zona de la Cordillera del Paine desaparecieron cinco luces nocturnas sin dejar rastro?",
+      "narracion": "¿Sabías que en la zona de la Cordillera del Paine desaparecieron cinco luces nocturnas sin dejar rastro? Esa noche, los residentes escucharon un zumbido profundo que vibró las ventanas y, al mirar al cielo, vieron destellos verdes que se desvanecieron en segundos. Los científicos que investigaron el fenómeno no hallaron ninguna señal de satélite ni de aeronave militar; solo una extraña anomalía magnética registrada por los equipos locales. Testigos afirman que el aire se volvió denso, como si una pared invisible se hubiera materializado, y que, al pasar, una silueta difusa se deslizó entre los árboles, dejando una estela de hojas quemadas. ¿Podría ser un portal a otra dimensión o simplemente una ilusión óptica provocada por una tormenta de plasma? La teoría más aceptada sugiere una combinación de auroras australes inesperadas y resonancia eléctrica del suelo, pero la falta de datos concretos mantiene el misterio vivo. Mientras algunos escépticos lo descartan como un efecto de la luz de la luna, otros recogen testimonios de viajeros que aseguran haber sentido una presión en el pecho, como si el tiempo se hubiera comprimido. Lo intrigante es que, al día siguiente, el mismo punto mostró una ligera depresión en el terreno, como si algo hubiera sido absorbido. ¿Qué oculta realmente la Cordillera del Paine? En el próximo episodio desvelaremos el hallazgo de una cámara subterránea que podría cambiarlo todo y desafiará nuestras nociones de realidad.",
+      "escenas": [
+        {
+          "texto": "¿Sabías que en la zona de la Cordillera del Paine desaparecieron cinco luces nocturnas sin dejar rastro?",
+          "visual": "Cima nevada al anochecer, cámara se desliza entre picos y aparecen breves luces parpadeantes en el horizonte."
+        },
+        {
+          "texto": "Los residentes escucharon un zumbido profundo que vibró las ventanas y vieron destellos verdes que se desvanecieron.",
+          "visual": "Casa rústica con ventanas temblando, ondas sonoras visualizadas y destellos verdes cruzando el cielo nocturno."
+        },
+        {
+          "texto": "Los científicos no hallaron señal de satélite ni de aeronave militar; solo una anomalía magnética.",
+          "visual": "Laboratorio móvil, pantallas con gráficos de campo magnético y mapa de la zona resaltando el punto de anomalía."
+        },
+        {
+          "texto": "Una silueta difusa se deslizó entre los árboles, dejando hojas quemadas.",
+          "visual": "Bosque oscuro, travelling entre troncos, hojas crujientes y humo leve que surge del suelo."
+        },
+        {
+          "texto": "La teoría sugiere auroras australes inesperadas y resonancia eléctrica del suelo.",
+          "visual": "Cielo nocturno con auroras verdes intensas, tierra vibrando y efectos de luz que recorren el terreno."
+        },
+        {
+          "texto": "Al día siguiente, el mismo punto mostró una ligera depresión en el terreno, como si algo hubiera sido absorbido.",
+          "visual": "Terreno con cráter pequeño, cámara gira alrededor revelando sombras alargadas y marcas de compresión."
+        },
+        {
+          "texto": "En el próximo episodio desvelaremos el hallazgo de una cámara subterránea que podría cambiarlo todo y desafiará nuestras nociones de realidad.",
+          "visual": "Entrada oculta a una caverna, luz tenue, cámara se adentra mostrando túneles misteriosos y símbolos en las paredes."
+        }
+      ],
+      "id": "4483db79f2459988",
+      "fecha": "2026-11-10T21:13:20.204435+00:00"
     }
   ],
   "temas": [
     "Misterios inexplicables"
   ],
   "estilos": [
-    "satisfactorio"
+    "satisfactorio",
+    "cinematico"
   ]
 }
