@@ -117,6 +117,42 @@
       ],
       "id": "4483db79f2459988",
       "fecha": "2026-11-10T21:13:20.204435+00:00"
+    },
+    {
+      "titulo_serie": "Misterios inexplicables",
+      "titulo": "El salto que desvela un portal imposible",
+      "parte": 4,
+      "estilo_visual": "minecraft",
+      "gancho": "¿Qué harías si al saltar sobre un bloque rojo la pantalla se rompe y aparece una señal desconocida?",
+      "narracion": "¿Qué harías si al saltar sobre un bloque rojo en tu mundo de Minecraft, la pantalla parpadea y aparece una señal que nadie ha visto antes? En este cuarto salto, el parkour nos lleva al borde de un acantilado pixelado donde una estructura de piedra flotante vibra sin explicación. Cada paso resuena como un latido, y de repente, una esfera luminosa se abre bajo mis pies, revelando una caverna oculta que no aparece en ningún mapa. Dentro, un portal de obsidiana chisporrotea sin activarse, pero una inscripción críptica —“El tiempo se dobla aquí”— parece susurrar una advertencia. ¿Será solo un glitch o hay algo más? Corro, salto de plataformas que desaparecen al contacto, y el ritmo se acelera; la música se vuelve aguda, como si el propio juego intentara escapar. De pronto, una silueta de un jugador desconocido aparece, mirando fijamente, pero su avatar se desvanece al tocar el aire, dejando tras de sí un eco de coordenadas. Regreso al punto de partida, pero el bloque rojo ahora muestra una marca que no estaba antes, como una huella de otro mundo. El misterio se intensifica: ¿Quién dejó esa señal y por qué? La respuesta llega cuando el cielo pixelado se vuelve negro y una lluvia de bloques de hierro cae, formando la palabra “FIN”. Pero justo antes de que la pantalla se apague, un último bloque brillante parpadea: “Episodio 5: La puerta del silencio”.",
+      "escenas": [
+        {
+          "texto": "¿Qué harías si al saltar sobre un bloque rojo la pantalla se rompe y aparece una señal desconocida?",
+          "visual": "Jugador salta sobre un bloque rojo brillante; la cámara vibra y la pantalla muestra un destello glitch."
+        },
+        {
+          "texto": "El parkour nos lleva al borde de un acantilado pixelado donde una estructura de piedra flotante vibra sin explicación.",
+          "visual": "Vista lateral del acantilado de bloques; una torre de piedra levita mientras el personaje corre y salta entre plataformas."
+        },
+        {
+          "texto": "Una esfera luminosa se abre bajo mis pies, revelando una caverna oculta con un portal de obsidiana y una inscripción críptica.",
+          "visual": "El suelo se despliega en una caverna subterránea; un portal chisporrotea y una placa de piedra muestra el texto “El tiempo se dobla aquí”."
+        },
+        {
+          "texto": "Una silueta de un jugador desconocido aparece, mira fijamente y su avatar se desvanece al tocar el aire.",
+          "visual": "Figura fantasmagórica surge entre plataformas que desaparecen al instante; la cámara gira rápido para seguir el movimiento."
+        },
+        {
+          "texto": "El bloque rojo ahora muestra una marca extraña mientras una lluvia de bloques de hierro cae formando la palabra “FIN”.",
+          "visual": "Lluvia de bloques de hierro cae del cielo oscuro; el bloque rojo en el suelo tiene una huella brillante que forma la palabra FIN."
+        },
+        {
+          "texto": "Un último bloque brillante parpadea y anuncia “Episodio 5: La puerta del silencio”.",
+          "visual": "Un único bloque dorado pulsa luz; texto flotante aparece sobre él mientras la cámara se aleja lentamente."
+        }
+      ],
+      "id": "30628938275c1afd",
+      "fecha": "2026-11-12T21:45:15.527773+00:00"
     }
   ],
   "temas": [
@@ -124,6 +160,7 @@
   ],
   "estilos": [
     "satisfactorio",
-    "cinematico"
+    "cinematico",
+    "minecraft"
   ]
 }
