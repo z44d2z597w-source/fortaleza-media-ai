@@ -15,8 +15,8 @@ import edge_tts
 
 
 # ==========================================
-# FORTALEZA MEDIA AI
-# MOTOR VISUAL CON REINTENTOS Y RESPALDOS
+# FORTALEZA MEDIA AI - MOTOR VISUAL 4.0
+# BÚSQUEDA DE FONDOS POR ESCENA
 # ==========================================
 
 ANCHO = 1080
@@ -45,19 +45,16 @@ ESTILOS = {
         "satisfying slime",
         "oddly satisfying",
         "satisfying cutting",
-        "satisfying process",
     ],
     "roblox": [
         "roblox obby gameplay",
         "obby obstacle course",
         "colorful obstacle course game",
-        "platform game gameplay",
     ],
     "cinematico": [
         "cinematic dark atmosphere",
-        "abandoned building cinematic",
         "mysterious forest cinematic",
-        "dark suspense cinematic",
+        "abandoned building cinematic",
         "dramatic landscape cinematic",
     ],
 }
@@ -65,6 +62,10 @@ ESTILOS = {
 CARPETA_SALIDA.mkdir(exist_ok=True)
 CARPETA_TEMP.mkdir(exist_ok=True)
 
+
+# ==========================================
+# HERRAMIENTAS
+# ==========================================
 
 def ejecutar(comando):
     resultado = subprocess.run(
@@ -92,7 +93,9 @@ def verificar_ffmpeg():
         )
 
         if resultado.returncode != 0:
-            raise RuntimeError(f"No se encontró {programa}.")
+            raise RuntimeError(
+                f"No se encontró {programa}."
+            )
 
 
 def limpiar_texto(texto):
@@ -107,7 +110,9 @@ def cargar_fondos_usados():
         datos = json.loads(
             HISTORIAL_FONDOS.read_text(encoding="utf-8")
         )
+
         return datos if isinstance(datos, list) else []
+
     except Exception:
         return []
 
@@ -119,21 +124,30 @@ def guardar_fondo_usado(identificador):
         usados.append(identificador)
 
     HISTORIAL_FONDOS.write_text(
-        json.dumps(usados[-300:], ensure_ascii=False, indent=2),
+        json.dumps(
+            usados[-300:],
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
 
+# ==========================================
+# ESCENAS Y ESTILO
+# ==========================================
+
 def dividir_en_escenas(guion):
     escenas = guion.get("escenas", [])
 
-    escenas_validas = [
+    validas = [
         escena for escena in escenas
         if isinstance(escena, dict)
+        and escena.get("visual")
     ]
 
-    if escenas_validas:
-        return escenas_validas[:8]
+    if validas:
+        return validas[:8]
 
     narracion = limpiar_texto(
         guion.get("narracion", "")
@@ -162,30 +176,69 @@ def obtener_estilo(guion):
     return estilo
 
 
+# ==========================================
+# CONVERTIR DESCRIPCIÓN EN BÚSQUEDA
+# ==========================================
+
+def crear_consulta_visual(escena, estilo):
+    visual = limpiar_texto(
+        escena.get("visual", "")
+    )
+
+    texto = limpiar_texto(
+        escena.get("texto", "")
+    )
+
+    # Prioriza la descripción visual de la escena.
+    consulta = visual or texto
+
+    # Elimina signos y caracteres que no ayudan a buscar.
+    consulta = re.sub(
+        r"[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ ]",
+        " ",
+        consulta,
+    )
+
+    consulta = limpiar_texto(consulta)
+
+    # Pixabay funciona mejor con búsquedas breves.
+    palabras = consulta.split()
+    consulta = " ".join(palabras[:9])
+
+    if not consulta:
+        consulta = random.choice(ESTILOS[estilo])
+
+    print(f"[ESCENA] {texto[:100]}")
+    print(f"[BÚSQUEDA VISUAL] {consulta}")
+
+    return consulta
+
+
+# ==========================================
+# PIXABAY
+# ==========================================
+
 def buscar_videos_pixabay(termino, usados):
     if not PIXABAY_API_KEY:
-        raise RuntimeError("Falta PIXABAY_API_KEY.")
-
-    url = "https://pixabay.com/api/videos/"
-
-    parametros = {
-        "key": PIXABAY_API_KEY,
-        "q": termino,
-        "per_page": 50,
-        "safesearch": "true",
-        "order": "popular",
-    }
+        raise RuntimeError(
+            "Falta configurar PIXABAY_API_KEY."
+        )
 
     respuesta = requests.get(
-        url,
-        params=parametros,
+        "https://pixabay.com/api/videos/",
+        params={
+            "key": PIXABAY_API_KEY,
+            "q": termino,
+            "per_page": 50,
+            "safesearch": "true",
+            "order": "popular",
+        },
         timeout=30,
     )
 
     respuesta.raise_for_status()
 
     resultados = respuesta.json().get("hits", [])
-    random.shuffle(resultados)
 
     nuevos = []
     repetidos = []
@@ -224,23 +277,30 @@ def buscar_videos_pixabay(termino, usados):
         else:
             nuevos.append(elemento)
 
+    random.shuffle(nuevos)
+    random.shuffle(repetidos)
+
     return nuevos + repetidos
 
 
-# ==========================================
-# SELECCIÓN DE CLIPS CON ALTERNATIVAS
-# ==========================================
-
-def seleccionar_clips(estilo, cantidad):
+def buscar_candidatos_escena(escena, estilo):
     usados = cargar_fondos_usados()
-    terminos = ESTILOS[estilo].copy()
-    random.shuffle(terminos)
 
-    encontrados = {}
-    repetidos = []
-    objetivo = cantidad + 6
+    consulta_visual = crear_consulta_visual(
+        escena,
+        estilo,
+    )
 
-    for termino in terminos:
+    candidatos = {}
+    consultas = [
+        consulta_visual,
+        *ESTILOS[estilo],
+    ]
+
+    for termino in consultas:
+        if len(candidatos) >= 12:
+            break
+
         print(f"[PIXABAY] Buscando: {termino}")
 
         try:
@@ -250,50 +310,34 @@ def seleccionar_clips(estilo, cantidad):
             )
 
             for video in resultados:
-                identificador = video["id"]
+                candidatos[video["id"]] = video
 
-                if identificador in encontrados:
-                    continue
-
-                if identificador in usados:
-                    repetidos.append(video)
-                else:
-                    encontrados[identificador] = video
-
-            if len(encontrados) >= objetivo:
-                break
+                if len(candidatos) >= 12:
+                    break
 
         except Exception as error:
-            print(f"[AVISO] Búsqueda fallida: {error}")
+            print(
+                f"[AVISO] Búsqueda fallida para "
+                f"'{termino}': {error}"
+            )
 
-    clips = list(encontrados.values())
+    clips = list(candidatos.values())
     random.shuffle(clips)
-
-    if len(clips) < objetivo:
-        disponibles = [
-            clip for clip in repetidos
-            if clip["id"] not in {
-                item["id"] for item in clips
-            }
-        ]
-
-        random.shuffle(disponibles)
-        clips.extend(disponibles)
 
     if not clips:
         raise RuntimeError(
-            f"No se encontraron videos para el estilo {estilo}."
+            "No se encontraron fondos para esta escena."
         )
 
     print(
-        f"[PIXABAY] {len(clips)} clips candidatos disponibles."
+        f"[PIXABAY] {len(clips)} candidatos para la escena."
     )
 
     return clips
 
 
 # ==========================================
-# DESCARGA CON REINTENTOS PARA ERROR 429
+# DESCARGAR CON REINTENTOS
 # ==========================================
 
 def descargar_video(url, destino):
@@ -332,11 +376,13 @@ def descargar_video(url, destino):
                             60,
                         )
                     except (TypeError, ValueError):
-                        espera = min(10 * intento, 45)
+                        espera = min(
+                            10 * intento,
+                            45,
+                        )
 
                     raise requests.exceptions.HTTPError(
-                        "Pixabay limitó temporalmente la descarga "
-                        "(429).",
+                        "Pixabay limitó temporalmente la descarga.",
                         response=respuesta,
                     )
 
@@ -354,7 +400,7 @@ def descargar_video(url, destino):
                 or temporal.stat().st_size < 10000
             ):
                 raise RuntimeError(
-                    "Video descargado vacío o incompleto."
+                    "Video vacío o incompleto."
                 )
 
             temporal.replace(destino)
@@ -372,25 +418,25 @@ def descargar_video(url, destino):
 
             if intento < 4:
                 print(
-                    f"[AVISO] Descarga fallida: {error}. "
+                    f"[AVISO] {error}. "
                     f"Nuevo intento en {espera} segundos."
                 )
 
                 time.sleep(espera)
 
     raise RuntimeError(
-        "No se pudo descargar el video después de 4 intentos: "
-        f"{ultimo_error}"
+        f"No se pudo descargar el video: {ultimo_error}"
     )
 
 
 # ==========================================
-# PREPARACIÓN DE VIDEO VERTICAL
+# PREPARAR VIDEO VERTICAL
 # ==========================================
 
 def preparar_video(origen, destino, duracion):
     filtro = (
-        f"scale={ANCHO}:{ALTO}:force_original_aspect_ratio=increase,"
+        f"scale={ANCHO}:{ALTO}:"
+        "force_original_aspect_ratio=increase,"
         f"crop={ANCHO}:{ALTO},"
         f"fps={FPS},"
         "setsar=1,"
@@ -416,46 +462,48 @@ def preparar_video(origen, destino, duracion):
 
 
 # ==========================================
-# CREACIÓN DE ESCENAS CON CLIPS DE RESPALDO
+# FONDO ESPECÍFICO PARA CADA ESCENA
 # ==========================================
 
 def crear_escenas(guion, duracion_total):
     escenas = dividir_en_escenas(guion)
 
     if not escenas:
-        raise RuntimeError("El guion no contiene escenas.")
+        raise RuntimeError(
+            "El guion no contiene escenas."
+        )
 
     estilo = obtener_estilo(guion)
 
     print(f"[ESTILO] {estilo.upper()}")
+    print("[MOTOR] Búsqueda visual individual activada.")
 
     cantidad = len(escenas)
-    clips = seleccionar_clips(estilo, cantidad)
-
     duracion_por_escena = duracion_total / cantidad
 
     archivos = []
-    siguiente_clip = 0
 
     for indice, escena in enumerate(escenas):
         print(
-            f"[FONDO {indice + 1}/{cantidad}] "
-            "Preparando escena..."
+            f"\n[FONDO {indice + 1}/{cantidad}]"
+        )
+
+        candidatos = buscar_candidatos_escena(
+            escena,
+            estilo,
         )
 
         preparado = (
-            CARPETA_TEMP / f"escena_{indice}.mp4"
+            CARPETA_TEMP /
+            f"escena_{indice}.mp4"
         )
 
         fondo_creado = False
 
-        while siguiente_clip < len(clips):
-            clip = clips[siguiente_clip]
-            siguiente_clip += 1
-
+        for numero, clip in enumerate(candidatos, start=1):
             original = (
                 CARPETA_TEMP /
-                f"clip_{estilo}_{indice}_{siguiente_clip}.mp4"
+                f"clip_{indice}_{numero}.mp4"
             )
 
             try:
@@ -484,16 +532,15 @@ def crear_escenas(guion, duracion_total):
                 fondo_creado = True
 
                 print(
-                    f"[FONDO OK] Escena {indice + 1}: "
-                    f"clip {clip['id']}"
+                    f"[FONDO OK] Escena {indice + 1} "
+                    f"con video {clip['id']}"
                 )
 
                 break
 
             except Exception as error:
                 print(
-                    f"[AVISO] Clip {clip['id']} descartado: "
-                    f"{error}"
+                    f"[AVISO] Clip descartado: {error}"
                 )
 
                 original.unlink(missing_ok=True)
@@ -502,8 +549,8 @@ def crear_escenas(guion, duracion_total):
         if not fondo_creado:
             if archivos:
                 print(
-                    "[AVISO] Se agotaron los clips. "
-                    "Reutilizando el último fondo válido."
+                    "[AVISO] No hubo más candidatos. "
+                    "Se reutiliza el último fondo válido."
                 )
 
                 shutil.copy2(
@@ -515,9 +562,8 @@ def crear_escenas(guion, duracion_total):
 
             else:
                 raise RuntimeError(
-                    "No se pudo descargar ningún fondo válido. "
-                    "Se cancela la generación para evitar "
-                    "un video negro."
+                    "No se pudo crear ningún fondo válido. "
+                    "Se cancela el video para evitar una pantalla negra."
                 )
 
     return archivos
@@ -580,7 +626,7 @@ async def generar_audio(texto, destino):
 
 
 # ==========================================
-# DURACIÓN DEL ARCHIVO
+# DURACIÓN
 # ==========================================
 
 def obtener_duracion(archivo):
@@ -613,7 +659,9 @@ def crear_subtitulos(guion, duracion_audio, destino):
     ).split()
 
     if not palabras:
-        raise RuntimeError("La narración está vacía.")
+        raise RuntimeError(
+            "La narración está vacía."
+        )
 
     grupos = [
         palabras[i:i + 5]
@@ -655,7 +703,10 @@ def crear_subtitulos(guion, duracion_audio, destino):
         horas = int(valor // 3600)
         minutos = int((valor % 3600) // 60)
         segundos = valor % 60
-        return f"{horas}:{minutos:02d}:{segundos:05.2f}"
+
+        return (
+            f"{horas}:{minutos:02d}:{segundos:05.2f}"
+        )
 
     for indice, grupo in enumerate(grupos):
         inicio = indice * duracion_grupo
@@ -667,8 +718,8 @@ def crear_subtitulos(guion, duracion_audio, destino):
         texto = escapar_ass(" ".join(grupo))
 
         lineas.append(
-            f"Dialogue: 0,{tiempo(inicio)},{tiempo(final)},"
-            f"Default,,0,0,0,,{texto}"
+            f"Dialogue: 0,{tiempo(inicio)},"
+            f"{tiempo(final)},Default,,0,0,0,,{texto}"
         )
 
     destino.write_text(
@@ -682,7 +733,10 @@ def crear_subtitulos(guion, duracion_audio, destino):
 # ==========================================
 
 def mezclar_video_audio(video, audio, subtitulos, destino):
-    ruta = str(subtitulos.resolve()).replace("\\", "/")
+    ruta = str(
+        subtitulos.resolve()
+    ).replace("\\", "/")
+
     ruta = ruta.replace(":", "\\:")
     ruta = ruta.replace("'", "\\'")
 
@@ -728,7 +782,9 @@ async def renderizar_short(guion=None):
     )
 
     if not narracion:
-        raise RuntimeError("No hay narración.")
+        raise RuntimeError(
+            "No hay narración."
+        )
 
     identificador = guion.get("id") or hashlib.sha256(
         narracion.encode("utf-8")
@@ -748,16 +804,18 @@ async def renderizar_short(guion=None):
     duracion_audio = obtener_duracion(audio)
 
     if duracion_audio <= 0:
-        raise RuntimeError("Duración de audio inválida.")
+        raise RuntimeError(
+            "Duración de audio inválida."
+        )
 
     if duracion_audio > DURACION_MAXIMA:
         raise RuntimeError(
             f"El audio dura {duracion_audio:.1f} segundos. "
-            f"El máximo es {DURACION_MAXIMA}."
+            f"Máximo permitido: {DURACION_MAXIMA}."
         )
 
     print(f"[AUDIO] {duracion_audio:.1f} segundos")
-    print(f"[VIDEO] Estilo elegido: {estilo}")
+    print(f"[ESTILO] {estilo}")
 
     escenas = crear_escenas(
         guion,
@@ -800,7 +858,10 @@ async def renderizar_short(guion=None):
         f"{nombre}_{identificador}.mp4"
     )
 
-    print("[RENDER] Combinando voz, fondos y subtítulos...")
+    print(
+        "[RENDER] Combinando narración, "
+        "fondos y subtítulos..."
+    )
 
     mezclar_video_audio(
         video_base,
@@ -813,6 +874,7 @@ async def renderizar_short(guion=None):
 
     if duracion_final > DURACION_MAXIMA:
         salida.unlink(missing_ok=True)
+
         raise RuntimeError(
             "El video supera el límite de duración."
         )
@@ -822,6 +884,7 @@ async def renderizar_short(guion=None):
         or salida.stat().st_size < 1_000_000
     ):
         salida.unlink(missing_ok=True)
+
         raise RuntimeError(
             "El video final está vacío o pesa menos de 1 MB."
         )
