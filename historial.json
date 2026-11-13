@@ -153,6 +153,46 @@
       ],
       "id": "30628938275c1afd",
       "fecha": "2026-11-12T21:45:15.527773+00:00"
+    },
+    {
+      "titulo_serie": "Misterios inexplicables",
+      "titulo": "El laberinto del tiempo: último desafío",
+      "parte": 5,
+      "estilo_visual": "roblox",
+      "gancho": "¡Detente! En los últimos metros de este obby, una luz azul parpadea sin razón y el suelo se vuelve invisible.",
+      "narracion": "¡Detente! En los últimos metros de este obby, una luz azul parpadea sin razón y el suelo se vuelve invisible. ¿Qué oculta esa zona? Corramos, el cronómetro avanza y cada salto revela una pista: una placa con símbolos que ningún jugador ha descifrado, un eco que repite nombres que nadie reconoce. De repente, el avatar se desliza sobre una plataforma giratoria que parece desafiar la gravedad, y el sonido de una campana distante se vuelve cada vez más fuerte. ¿Es solo un truco de programación o algo más? Al cruzar el puente de cristal, aparecen sombras que se mueven al ritmo de la música, como si una entidad jugara a esconderse. Un portal se abre, pero en vez de llevarnos a la siguiente zona, muestra una pantalla estática con una foto antigua de un bosque mexicano, donde se escuchó el mismo zumbido hace décadas. La comunidad comenta que ese mismo sonido se registra en grabaciones de la zona de la Sierra Gorda, sin explicación. Saltamos al último salto, donde el tiempo se congela: el avatar queda suspendido en el aire, y una voz susurra 'no todo está programado'. El fondo se vuelve negro y aparece un mensaje: 'El próximo nivel no está en Roblox, está en la realidad'. Así cerramos la serie, pero la verdadera pregunta queda: ¿quién controla los límites entre lo digital y lo inexplicable? Y mientras el reloj marca el último segundo, la pantalla se desvanece, dejando la sensación de que el juego apenas empezó.",
+      "escenas": [
+        {
+          "texto": "¡Detente! En los últimos metros de este obby, una luz azul parpadea sin razón y el suelo se vuelve invisible.",
+          "visual": "Obby colorido con luces neon, una zona donde el suelo desaparece y una luz azul intermitente que ilumina el camino."
+        },
+        {
+          "texto": "¿Qué oculta esa zona? Corramos, el cronómetro avanza y cada salto revela una pista: una placa con símbolos que ningún jugador ha descifrado, un eco que repite nombres que nadie reconoce.",
+          "visual": "Avatar saltando sobre una placa brillante cubierta de símbolos flotantes; ondas de sonido visibles alrededor del eco."
+        },
+        {
+          "texto": "De repente, el avatar se desliza sobre una plataforma giratoria que parece desafiar la gravedad, y el sonido de una campana distante se vuelve cada vez más fuerte.",
+          "visual": "Plataforma giratoria sobre vacío con efectos de gravedad invertida; campana dorada vibrando al fondo."
+        },
+        {
+          "texto": "Al cruzar el puente de cristal, aparecen sombras que se mueven al ritmo de la música, como si una entidad jugara a esconderse.",
+          "visual": "Puente de cristal translúcido, sombras alargadas que bailan al compás de luces pulsantes."
+        },
+        {
+          "texto": "Un portal se abre, pero muestra una pantalla estática con una foto antigua de un bosque mexicano, donde se escuchó el mismo zumbido hace décadas.",
+          "visual": "Portal brillante que revela una pantalla estática con una foto sepia de un bosque denso, rodeada de estática visual."
+        },
+        {
+          "texto": "Saltamos al último salto, donde el tiempo se congela: el avatar queda suspendido en el aire, y una voz susurra 'no todo está programado'.",
+          "visual": "Avatar flotando en cámara lenta, fondo negro con partículas de luz; texto emergente de la voz en estilo glitch."
+        },
+        {
+          "texto": "El fondo se vuelve negro y aparece un mensaje: 'El próximo nivel no está en Roblox, está en la realidad'. Y mientras el reloj marca el último segundo, la pantalla se desvanece, dejando la sensación de que el juego apenas empezó.",
+          "visual": "Pantalla negra que muestra el mensaje en neón rojo; reloj digital marcando el último segundo; fade out que deja solo el borde del juego."
+        }
+      ],
+      "id": "4fa4d609b2cf4b4c",
+      "fecha": "2026-11-13T17:38:50.439415+00:00"
     }
   ],
   "temas": [
@@ -161,6 +201,7 @@
   "estilos": [
     "satisfactorio",
     "cinematico",
-    "minecraft"
+    "minecraft",
+    "roblox"
   ]
 }
