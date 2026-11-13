@@ -233,17 +233,63 @@
       ],
       "id": "c11bf329e81fc74a",
       "fecha": "2026-11-13T18:03:51.953132+00:00"
+    },
+    {
+      "categoria": "drama",
+      "titulo_serie": "El sacrificio que nadie conocía",
+      "titulo": "El precio del silencio",
+      "parte": 1,
+      "estilo_visual": "cinematico",
+      "gancho": "¿Alguna vez sentiste que el silencio guarda un sacrificio?",
+      "narracion": "¿Alguna vez sentiste que el silencio guarda un sacrificio? Ana siempre llega tarde a la escuela, su mirada cansada asusta a Carlos. \"¿Qué pasa, Ana?\" pregunta él, mientras la madre, María, frunce el ceño. Nadie sabe que Ana trabaja en el restaurante del barrio después de clases, ocultando su agotamiento para que su hermano siga soñando con ser médico. Luis, su mejor amigo, la ve pasar por la calle y sospecha algo, pero ella sólo sonríe y dice: \"Todo bajo control\". Un día, el director anuncia una beca para el concurso de música, pero Ana, que toca el violín, decide no inscribirse. En su lugar, entrega una carta anónima que paga la inscripción de Carlos. Cuando él abre la carta, descubre que la firma es de Ana. \"¿Por qué?\" pregunta, con los ojos húmedos. Ana lo mira y susurra: \"Porque tú mereces volar, aunque yo quede en tierra\". El sonido de la campana del colegio resuena, y el público se queda con la duda: ¿qué más oculta Ana bajo su silencio?",
+      "escenas": [
+        {
+          "texto": "Ana camina por el pasillo de la escuela, su mochila cae al suelo y su rostro muestra agotamiento.",
+          "visual": "Close-up of a teenage girl with disheveled hair, dragging a heavy backpack, hallway lockers blurred in background, morning light streaming through windows."
+        },
+        {
+          "texto": "En la cocina de casa, Carlos le pregunta a Ana qué le ocurre mientras María los observa con preocupación.",
+          "visual": "Medium shot of a modest kitchen, a teenage boy leaning on the counter asking a girl, their mother standing by the stove, warm yellow lighting."
+        },
+        {
+          "texto": "Después de clases, Ana trabaja en la cocina del restaurante, sirviendo platos bajo luces tenues.",
+          "visual": "Wide angle of a bustling restaurant kitchen at night, Ana in a white apron flipping a pan, steam rising, fluorescent lights flickering."
+        },
+        {
+          "texto": "Luis la ve salir del restaurante bajo la lluvia y la llama, pero ella solo asiente y sigue caminando.",
+          "visual": "Rain-soaked street at night, Luis holding an umbrella, gesturing toward a girl in a dark coat, city neon signs reflected on wet pavement."
+        },
+        {
+          "texto": "En el auditorio, el director anuncia la beca para el concurso de música, mientras Ana observa desde su asiento.",
+          "visual": "Stage view of a school auditorium, director on a podium gesturing, spotlight on a banner reading \"Beca de Música\", audience seats filled, Ana sitting in the front row."
+        },
+        {
+          "texto": "Ana desliza una carta sin nombre en la casilla de Carlos, sus manos temblorosas.",
+          "visual": "Close-up of a hand placing an envelope into a locker slot, the envelope sealed with a simple red stamp, locker numbers blurred."
+        },
+        {
+          "texto": "Carlos abre la carta, lee la firma de Ana y sus ojos se llenan de lágrimas mientras la cámara enfoca su expresión.",
+          "visual": "Close-up of a teenage boy holding an opened envelope, tears glistening, background soft-focused, his gaze shifting to an empty seat where Ana would have performed."
+        }
+      ],
+      "id": "1c4780e5b330e9b8",
+      "fecha": "2026-11-13T18:24:16.690475+00:00"
     }
   ],
   "temas": [
     "Misterios inexplicables",
-    "Curiosidades del mundo"
+    "Curiosidades del mundo",
+    "El sacrificio que nadie conocía"
   ],
   "estilos": [
     "satisfactorio",
     "cinematico",
     "minecraft",
     "roblox",
-    "satisfactorio"
+    "satisfactorio",
+    "cinematico"
+  ],
+  "categorias": [
+    "drama"
   ]
 }
