@@ -26,6 +26,16 @@ async def main():
         CARPETA_SALIDA.mkdir(exist_ok=True)
         CARPETA_TEMP.mkdir(exist_ok=True)
 
+        print("\n[LIMPIEZA] Eliminando videos anteriores...")
+
+        for archivo in CARPETA_SALIDA.glob("*.mp4"):
+            archivo.unlink()
+            print(f"[ELIMINADO] {archivo.name}")
+
+        for archivo in CARPETA_TEMP.iterdir():
+            if archivo.is_file():
+                archivo.unlink()
+
         print("\n[PASO 1] Generando historia original...")
 
         guion = obtener_guion_hoy()
@@ -39,11 +49,7 @@ async def main():
 
         archivo_guion = CARPETA_TEMP / "guion_actual.json"
 
-        with open(
-            archivo_guion,
-            "w",
-            encoding="utf-8",
-        ) as archivo:
+        with open(archivo_guion, "w", encoding="utf-8") as archivo:
             json.dump(
                 guion,
                 archivo,
@@ -56,20 +62,30 @@ async def main():
         video = await renderizar_short(guion)
 
         if not video:
-            raise RuntimeError(
-                "El renderizador no devolvió una ruta de video."
-            )
+            raise RuntimeError("El renderizador no devolvió una ruta.")
 
         ruta_video = Path(video)
 
         if not ruta_video.exists():
+            raise RuntimeError("No se encontró el video terminado.")
+
+        if ruta_video.stat().st_size < 1_000_000:
             raise RuntimeError(
-                "No se encontró el video terminado."
+                "El video pesa menos de 1 MB. "
+                "Se detiene para evitar publicar un video defectuoso."
             )
 
-        if ruta_video.stat().st_size < 100000:
+        videos = list(CARPETA_SALIDA.glob("*.mp4"))
+
+        if len(videos) != 1:
             raise RuntimeError(
-                "El archivo generado es demasiado pequeño."
+                f"Se esperaba exactamente un video nuevo, "
+                f"pero se encontraron {len(videos)}."
+            )
+
+        if videos[0].resolve() != ruta_video.resolve():
+            raise RuntimeError(
+                "El video devuelto no coincide con el único archivo generado."
             )
 
         print("\n[PASO 4] Registrando episodio completado...")
@@ -81,7 +97,8 @@ async def main():
         print("==========================================")
         print(f"TÍTULO: {guion['titulo']}")
         print(f"VIDEO: {ruta_video}")
-        print("Episodio registrado correctamente.")
+        print(f"TAMAÑO: {ruta_video.stat().st_size / 1024 / 1024:.2f} MB")
+        print("Se generó exactamente un video nuevo.")
 
     except Exception as error:
         print("\n==========================================")
