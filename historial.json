@@ -193,15 +193,57 @@
       ],
       "id": "4fa4d609b2cf4b4c",
       "fecha": "2026-11-13T17:38:50.439415+00:00"
+    },
+    {
+      "titulo_serie": "Curiosidades del mundo",
+      "titulo": "Secretos del slime cósmico",
+      "parte": 1,
+      "estilo_visual": "satisfactorio",
+      "gancho": "¿Sabías que el slime puede revelar un secreto del espacio?",
+      "narracion": "¿Sabías que el slime puede revelar un secreto del espacio? En 2022 científicos usaron una masa viscosa parecida al slime para simular la formación de galaxias, viendo cómo los filamentos se entrelazan. Pero eso no es todo: la arena cinética, ese polvo que fluye como agua, reproduce la forma de los cráteres lunares en segundos, mostrándonos cómo impactan los meteoritos. ¿Te imaginas que la tinta magnética, al deslizarse, recrea los patrones de corrientes oceánicas invisibles? Cada trazo forma remolinos que los oceanógrafos estudian para predecir tormentas. Y la espuma de café, al volverse espuma, guarda la misma estructura fractal que los copos de nieve, recordándonos que la naturaleza repite patrones a cualquier escala. Por último, el polvo de aluminio que chisporrotea al contacto con agua reproduce el brillo de los meteoritos al entrar en la atmósfera. ¿Qué nos dice todo esto? Que los procesos más satisfactorios que vemos en pantalla son, en realidad, micro‑laboratorios de la naturaleza. En el próximo Short descubriremos cómo un simple bolígrafo de gel puede revelar el mapa de los vientos solares. No te lo pierdas.",
+      "escenas": [
+        {
+          "texto": "¿Sabías que el slime puede revelar un secreto del espacio?",
+          "visual": "slow-motion slime stretching brightly"
+        },
+        {
+          "texto": "En 2022 científicos usaron una masa viscosa parecida al slime para simular la formación de galaxias, viendo cómo los filamentos se entrelazan.",
+          "visual": "galaxy simulation with viscous fluid"
+        },
+        {
+          "texto": "Pero eso no es todo: la arena cinética, ese polvo que fluye como agua, reproduce la forma de los cráteres lunares en segundos, mostrándonos cómo impactan los meteoritos.",
+          "visual": "kinetic sand forming lunar crater"
+        },
+        {
+          "texto": "¿Te imaginas que la tinta magnética, al deslizarse, recrea los patrones de corrientes oceánicas invisibles? Cada trazo forma remolinos que los oceanógrafos estudian para predecir tormentas.",
+          "visual": "magnetic ink swirling in water"
+        },
+        {
+          "texto": "Y la espuma de café, al volverse espuma, guarda la misma estructura fractal que los copos de nieve, recordándonos que la naturaleza repite patrones a cualquier escala.",
+          "visual": "coffee foam creating fractal snowflake"
+        },
+        {
+          "texto": "Por último, el polvo de aluminio que chisporrotea al contacto con agua reproduce el brillo de los meteoritos al entrar en la atmósfera.",
+          "visual": "aluminum powder fizzing in water"
+        },
+        {
+          "texto": "¿Qué nos dice todo esto? Que los procesos más satisfactorios que vemos en pantalla son, en realidad, micro‑laboratorios de la naturaleza. En el próximo Short descubriremos cómo un simple bolígrafo de gel puede revelar el mapa de los vientos solares. No te lo pierdas.",
+          "visual": "gel pen drawing solar wind map"
+        }
+      ],
+      "id": "c11bf329e81fc74a",
+      "fecha": "2026-11-13T18:03:51.953132+00:00"
     }
   ],
   "temas": [
-    "Misterios inexplicables"
+    "Misterios inexplicables",
+    "Curiosidades del mundo"
   ],
   "estilos": [
     "satisfactorio",
     "cinematico",
     "minecraft",
-    "roblox"
+    "roblox",
+    "satisfactorio"
   ]
 }
