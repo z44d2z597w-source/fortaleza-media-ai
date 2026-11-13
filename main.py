@@ -9,6 +9,7 @@ from video_engine import (
     obtener_guion_hoy,
     registrar_guion_completado,
 )
+
 from render_short import renderizar_short
 
 
@@ -26,12 +27,14 @@ async def main():
         CARPETA_SALIDA.mkdir(exist_ok=True)
         CARPETA_TEMP.mkdir(exist_ok=True)
 
+        # LIMPIAR VIDEOS ANTERIORES
         print("\n[LIMPIEZA] Eliminando videos anteriores...")
 
         for archivo in CARPETA_SALIDA.glob("*.mp4"):
             archivo.unlink()
             print(f"[ELIMINADO] {archivo.name}")
 
+        # LIMPIAR ARCHIVOS TEMPORALES
         for archivo in CARPETA_TEMP.iterdir():
             if archivo.is_file():
                 archivo.unlink()
@@ -39,6 +42,20 @@ async def main():
         print("\n[PASO 1] Generando historia original...")
 
         guion = obtener_guion_hoy()
+
+        campos_requeridos = [
+            "titulo",
+            "narracion",
+            "titulo_serie",
+            "parte",
+            "estilo_visual",
+        ]
+
+        for campo in campos_requeridos:
+            if not guion.get(campo):
+                raise RuntimeError(
+                    f"El guion no contiene el campo requerido: {campo}"
+                )
 
         print(f"[SERIE] {guion['titulo_serie']}")
         print(f"[EPISODIO] {guion['parte']} de 5")
@@ -49,7 +66,11 @@ async def main():
 
         archivo_guion = CARPETA_TEMP / "guion_actual.json"
 
-        with open(archivo_guion, "w", encoding="utf-8") as archivo:
+        with open(
+            archivo_guion,
+            "w",
+            encoding="utf-8",
+        ) as archivo:
             json.dump(
                 guion,
                 archivo,
@@ -62,12 +83,21 @@ async def main():
         video = await renderizar_short(guion)
 
         if not video:
-            raise RuntimeError("El renderizador no devolvió una ruta.")
+            raise RuntimeError(
+                "El renderizador no devolvió una ruta de video."
+            )
 
         ruta_video = Path(video)
 
         if not ruta_video.exists():
-            raise RuntimeError("No se encontró el video terminado.")
+            raise RuntimeError(
+                "No se encontró el video terminado."
+            )
+
+        if ruta_video.suffix.lower() != ".mp4":
+            raise RuntimeError(
+                "El archivo generado no es un MP4."
+            )
 
         if ruta_video.stat().st_size < 1_000_000:
             raise RuntimeError(
@@ -79,13 +109,14 @@ async def main():
 
         if len(videos) != 1:
             raise RuntimeError(
-                f"Se esperaba exactamente un video nuevo, "
+                "Se esperaba exactamente un video nuevo, "
                 f"pero se encontraron {len(videos)}."
             )
 
         if videos[0].resolve() != ruta_video.resolve():
             raise RuntimeError(
-                "El video devuelto no coincide con el único archivo generado."
+                "El video devuelto no coincide con el único "
+                "archivo generado."
             )
 
         print("\n[PASO 4] Registrando episodio completado...")
@@ -95,17 +126,24 @@ async def main():
         print("\n==========================================")
         print("       PROCESO COMPLETADO")
         print("==========================================")
+
         print(f"TÍTULO: {guion['titulo']}")
         print(f"VIDEO: {ruta_video}")
-        print(f"TAMAÑO: {ruta_video.stat().st_size / 1024 / 1024:.2f} MB")
+        print(
+            f"TAMAÑO: "
+            f"{ruta_video.stat().st_size / 1024 / 1024:.2f} MB"
+        )
+
         print("Se generó exactamente un video nuevo.")
 
     except Exception as error:
         print("\n==========================================")
         print("       ERROR EN EL PROCESO")
         print("==========================================")
+
         print(str(error))
         traceback.print_exc()
+
         sys.exit(1)
 
 
