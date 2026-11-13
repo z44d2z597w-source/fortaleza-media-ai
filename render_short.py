@@ -6,7 +6,6 @@ import random
 import asyncio
 import subprocess
 import hashlib
-import shutil
 import time
 from pathlib import Path
 
@@ -15,8 +14,8 @@ import edge_tts
 
 
 # ==========================================
-# FORTALEZA MEDIA AI - MOTOR VISUAL 4.0
-# BÚSQUEDA DE FONDOS POR ESCENA
+# FORTALEZA MEDIA AI - MOTOR VISUAL 5.0
+# DRAMA Y AVENTURAS
 # ==========================================
 
 ANCHO = 1080
@@ -33,29 +32,23 @@ PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")
 VOZ_PRINCIPAL = "es-MX-DaliaNeural"
 VOZ_RESPALDO = "es-MX-JorgeNeural"
 
-ESTILOS = {
-    "minecraft": [
-        "minecraft parkour gameplay",
-        "minecraft gameplay",
-        "block game parkour",
-        "pixel game obstacle course",
+BUSQUEDAS_CATEGORIA = {
+    "drama": [
+        "emotional cinematic family",
+        "friends emotional conversation",
+        "dramatic cinematic storytelling",
+        "person looking through old photographs",
+        "emotional reunion cinematic",
+        "cinematic sunset silhouette",
     ],
-    "satisfactorio": [
-        "satisfying kinetic sand",
-        "satisfying slime",
-        "oddly satisfying",
-        "satisfying cutting",
-    ],
-    "roblox": [
-        "roblox obby gameplay",
-        "obby obstacle course",
-        "colorful obstacle course game",
-    ],
-    "cinematico": [
-        "cinematic dark atmosphere",
-        "mysterious forest cinematic",
-        "abandoned building cinematic",
-        "dramatic landscape cinematic",
+    "aventura": [
+        "cute cartoon animals adventure",
+        "colorful fantasy animated world",
+        "magical forest fantasy",
+        "cute animals exploring nature",
+        "cartoon fantasy adventure",
+        "magical glowing portal fantasy",
+        "funny cute animal friends",
     ],
 }
 
@@ -134,7 +127,31 @@ def guardar_fondo_usado(identificador):
 
 
 # ==========================================
-# ESCENAS Y ESTILO
+# CATEGORÍA
+# ==========================================
+
+def obtener_categoria(guion):
+    categoria = str(
+        guion.get("categoria", "drama")
+    ).lower().strip()
+
+    if categoria not in BUSQUEDAS_CATEGORIA:
+        categoria = "drama"
+
+    return categoria
+
+
+def obtener_nombre_categoria(categoria):
+    nombres = {
+        "drama": "DRAMA EMOCIONAL",
+        "aventura": "AVENTURA INFANTIL",
+    }
+
+    return nombres.get(categoria, "DRAMA EMOCIONAL")
+
+
+# ==========================================
+# ESCENAS
 # ==========================================
 
 def dividir_en_escenas(guion):
@@ -149,67 +166,32 @@ def dividir_en_escenas(guion):
     if validas:
         return validas[:8]
 
-    narracion = limpiar_texto(
-        guion.get("narracion", "")
+    raise RuntimeError(
+        "El guion no contiene escenas visuales válidas."
     )
 
-    partes = re.split(r"(?<=[.!?])\s+", narracion)
 
-    return [
-        {
-            "texto": parte,
-            "visual": parte,
-        }
-        for parte in partes[:8]
-        if parte
-    ]
-
-
-def obtener_estilo(guion):
-    estilo = str(
-        guion.get("estilo_visual", "cinematico")
-    ).lower().strip()
-
-    if estilo not in ESTILOS:
-        estilo = "cinematico"
-
-    return estilo
-
-
-# ==========================================
-# CONVERTIR DESCRIPCIÓN EN BÚSQUEDA
-# ==========================================
-
-def crear_consulta_visual(escena, estilo):
+def crear_consulta_visual(escena):
     visual = limpiar_texto(
         escena.get("visual", "")
     )
 
-    texto = limpiar_texto(
-        escena.get("texto", "")
-    )
-
-    # Prioriza la descripción visual de la escena.
-    consulta = visual or texto
-
-    # Elimina signos y caracteres que no ayudan a buscar.
     consulta = re.sub(
-        r"[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ ]",
+        r"[^a-zA-Z0-9 ]",
         " ",
-        consulta,
+        visual,
     )
 
     consulta = limpiar_texto(consulta)
 
-    # Pixabay funciona mejor con búsquedas breves.
     palabras = consulta.split()
+
     consulta = " ".join(palabras[:9])
 
     if not consulta:
-        consulta = random.choice(ESTILOS[estilo])
-
-    print(f"[ESCENA] {texto[:100]}")
-    print(f"[BÚSQUEDA VISUAL] {consulta}")
+        raise RuntimeError(
+            "La escena no contiene una descripción visual buscable."
+        )
 
     return consulta
 
@@ -229,7 +211,7 @@ def buscar_videos_pixabay(termino, usados):
         params={
             "key": PIXABAY_API_KEY,
             "q": termino,
-            "per_page": 50,
+            "per_page": 30,
             "safesearch": "true",
             "order": "popular",
         },
@@ -283,22 +265,23 @@ def buscar_videos_pixabay(termino, usados):
     return nuevos + repetidos
 
 
-def buscar_candidatos_escena(escena, estilo):
+def buscar_candidatos_escena(escena, categoria):
     usados = cargar_fondos_usados()
 
-    consulta_visual = crear_consulta_visual(
-        escena,
-        estilo,
-    )
+    consulta_visual = crear_consulta_visual(escena)
 
-    candidatos = {}
     consultas = [
         consulta_visual,
-        *ESTILOS[estilo],
+        *BUSQUEDAS_CATEGORIA[categoria],
     ]
 
+    candidatos = {}
+
+    print(f"[CATEGORÍA] {obtener_nombre_categoria(categoria)}")
+    print(f"[ESCENA] {escena.get('texto', '')[:100]}")
+
     for termino in consultas:
-        if len(candidatos) >= 12:
+        if len(candidatos) >= 10:
             break
 
         print(f"[PIXABAY] Buscando: {termino}")
@@ -312,32 +295,32 @@ def buscar_candidatos_escena(escena, estilo):
             for video in resultados:
                 candidatos[video["id"]] = video
 
-                if len(candidatos) >= 12:
+                if len(candidatos) >= 10:
                     break
 
         except Exception as error:
             print(
-                f"[AVISO] Búsqueda fallida para "
-                f"'{termino}': {error}"
+                f"[AVISO] Falló la búsqueda '{termino}': {error}"
             )
 
+        time.sleep(1)
+
     clips = list(candidatos.values())
-    random.shuffle(clips)
 
     if not clips:
         raise RuntimeError(
-            "No se encontraron fondos para esta escena."
+            f"No se encontraron fondos para la escena: {consulta_visual}"
         )
 
     print(
-        f"[PIXABAY] {len(clips)} candidatos para la escena."
+        f"[PIXABAY] {len(clips)} candidatos encontrados."
     )
 
     return clips
 
 
 # ==========================================
-# DESCARGAR CON REINTENTOS
+# DESCARGAR VIDEOS CON REINTENTOS
 # ==========================================
 
 def descargar_video(url, destino):
@@ -352,8 +335,7 @@ def descargar_video(url, destino):
 
         try:
             print(
-                f"[DESCARGA] Intento {intento}/4: "
-                f"{destino.name}"
+                f"[DESCARGA] Intento {intento}/4: {destino.name}"
             )
 
             with requests.get(
@@ -376,10 +358,7 @@ def descargar_video(url, destino):
                             60,
                         )
                     except (TypeError, ValueError):
-                        espera = min(
-                            10 * intento,
-                            45,
-                        )
+                        espera = min(10 * intento, 45)
 
                     raise requests.exceptions.HTTPError(
                         "Pixabay limitó temporalmente la descarga.",
@@ -419,7 +398,7 @@ def descargar_video(url, destino):
             if intento < 4:
                 print(
                     f"[AVISO] {error}. "
-                    f"Nuevo intento en {espera} segundos."
+                    f"Reintentando en {espera} segundos."
                 )
 
                 time.sleep(espera)
@@ -462,26 +441,24 @@ def preparar_video(origen, destino, duracion):
 
 
 # ==========================================
-# FONDO ESPECÍFICO PARA CADA ESCENA
+# CREAR FONDOS PARA CADA ESCENA
 # ==========================================
 
 def crear_escenas(guion, duracion_total):
     escenas = dividir_en_escenas(guion)
 
-    if not escenas:
-        raise RuntimeError(
-            "El guion no contiene escenas."
-        )
-
-    estilo = obtener_estilo(guion)
-
-    print(f"[ESTILO] {estilo.upper()}")
-    print("[MOTOR] Búsqueda visual individual activada.")
+    categoria = obtener_categoria(guion)
 
     cantidad = len(escenas)
     duracion_por_escena = duracion_total / cantidad
 
     archivos = []
+
+    print("==========================================")
+    print("[MOTOR VISUAL 5.0]")
+    print(f"[CATEGORÍA] {obtener_nombre_categoria(categoria)}")
+    print(f"[ESCENAS] {cantidad}")
+    print("==========================================")
 
     for indice, escena in enumerate(escenas):
         print(
@@ -490,7 +467,7 @@ def crear_escenas(guion, duracion_total):
 
         candidatos = buscar_candidatos_escena(
             escena,
-            estilo,
+            categoria,
         )
 
         preparado = (
@@ -532,8 +509,8 @@ def crear_escenas(guion, duracion_total):
                 fondo_creado = True
 
                 print(
-                    f"[FONDO OK] Escena {indice + 1} "
-                    f"con video {clip['id']}"
+                    f"[FONDO OK] Escena {indice + 1}: "
+                    f"video {clip['id']}"
                 )
 
                 break
@@ -547,24 +524,11 @@ def crear_escenas(guion, duracion_total):
                 preparado.unlink(missing_ok=True)
 
         if not fondo_creado:
-            if archivos:
-                print(
-                    "[AVISO] No hubo más candidatos. "
-                    "Se reutiliza el último fondo válido."
-                )
-
-                shutil.copy2(
-                    archivos[-1],
-                    preparado,
-                )
-
-                archivos.append(preparado)
-
-            else:
-                raise RuntimeError(
-                    "No se pudo crear ningún fondo válido. "
-                    "Se cancela el video para evitar una pantalla negra."
-                )
+            raise RuntimeError(
+                f"No se pudo obtener un fondo para la escena "
+                f"{indice + 1}. Se cancela el video para evitar "
+                "fondos negros o escenas incorrectas."
+            )
 
     return archivos
 
@@ -578,9 +542,15 @@ def unir_escenas(archivos, destino):
 
     with open(lista, "w", encoding="utf-8") as archivo:
         for elemento in archivos:
-            ruta = str(elemento.resolve()).replace("\\", "/")
+            ruta = str(
+                elemento.resolve()
+            ).replace("\\", "/")
+
             ruta = ruta.replace("'", "'\\''")
-            archivo.write(f"file '{ruta}'\n")
+
+            archivo.write(
+                f"file '{ruta}'\n"
+            )
 
     ejecutar([
         "ffmpeg",
@@ -599,7 +569,7 @@ def unir_escenas(archivos, destino):
 
 
 # ==========================================
-# GENERAR NARRACIÓN
+# GENERAR AUDIO
 # ==========================================
 
 async def generar_audio(texto, destino):
@@ -710,6 +680,7 @@ def crear_subtitulos(guion, duracion_audio, destino):
 
     for indice, grupo in enumerate(grupos):
         inicio = indice * duracion_grupo
+
         final = min(
             duracion_audio,
             (indice + 1) * duracion_grupo,
@@ -790,7 +761,12 @@ async def renderizar_short(guion=None):
         narracion.encode("utf-8")
     ).hexdigest()[:12]
 
-    estilo = obtener_estilo(guion)
+    categoria = obtener_categoria(guion)
+
+    print("==========================================")
+    print("[FORTALEZA MEDIA AI]")
+    print(f"[CATEGORÍA] {obtener_nombre_categoria(categoria)}")
+    print("==========================================")
 
     print("[AUDIO] Generando narración...")
 
@@ -815,7 +791,6 @@ async def renderizar_short(guion=None):
         )
 
     print(f"[AUDIO] {duracion_audio:.1f} segundos")
-    print(f"[ESTILO] {estilo}")
 
     escenas = crear_escenas(
         guion,
@@ -858,10 +833,7 @@ async def renderizar_short(guion=None):
         f"{nombre}_{identificador}.mp4"
     )
 
-    print(
-        "[RENDER] Combinando narración, "
-        "fondos y subtítulos..."
-    )
+    print("[RENDER] Combinando video, audio y subtítulos...")
 
     mezclar_video_audio(
         video_base,
@@ -889,11 +861,11 @@ async def renderizar_short(guion=None):
             "El video final está vacío o pesa menos de 1 MB."
         )
 
-    print("====================================")
+    print("==========================================")
     print("[OK] VIDEO TERMINADO")
     print(f"[ARCHIVO] {salida}")
     print(f"[DURACIÓN] {duracion_final:.1f} segundos")
-    print(f"[ESTILO] {estilo}")
-    print("====================================")
+    print(f"[CATEGORÍA] {obtener_nombre_categoria(categoria)}")
+    print("==========================================")
 
     return salida
