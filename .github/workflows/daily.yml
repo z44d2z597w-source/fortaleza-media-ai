@@ -8,7 +8,7 @@ on:
         description: "Publicar en YouTube automáticamente"
         required: false
         type: boolean
-        default: true
+        default: false
 
   schedule:
     - cron: "0 13 * * *"
@@ -126,27 +126,6 @@ jobs:
               archivo.write(f"VIDEO_DESCRIPTION={descripcion}\n")
           PY
 
-      - name: Guardar historial
-        if: success()
-        run: |
-          set -e
-
-          git config user.name "Fortaleza Media AI"
-          git config user.email "actions@github.com"
-
-          for archivo in historial.json fondos_usados.json; do
-            if [ -f "$archivo" ]; then
-              git add "$archivo"
-            fi
-          done
-
-          if git diff --cached --quiet; then
-            echo "No hay cambios en el historial."
-          else
-            git commit -m "Actualizar historial de Shorts [skip ci]"
-            git push
-          fi
-
       - name: Guardar video generado
         if: always()
         uses: actions/upload-artifact@v4
@@ -202,3 +181,24 @@ jobs:
           print('PUBLICACIÓN CONFIRMADA')
           print(respuesta.get('url', ''))
           "
+
+      - name: Guardar historial
+        if: success()
+        run: |
+          set -e
+
+          git config user.name "Fortaleza Media AI"
+          git config user.email "actions@github.com"
+
+          for archivo in historial.json fondos_usados.json; do
+            if [ -f "$archivo" ]; then
+              git add "$archivo"
+            fi
+          done
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios en el historial."
+          else
+            git commit -m "Actualizar historial de Shorts [skip ci]"
+            git push
+          fi
