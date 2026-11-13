@@ -32,33 +32,37 @@ TEMAS = [
 ESTILOS_VISUALES = {
     "minecraft": {
         "nombre": "Minecraft Parkour",
-        "descripcion": "Gameplay dinámico, saltos y obstáculos."
+        "descripcion": "Gameplay de parkour, saltos, obstáculos y recorridos dinámicos."
     },
     "satisfactorio": {
         "nombre": "Videos satisfactorios",
-        "descripcion": "Procesos visualmente satisfactorios, slime, arena y movimientos hipnóticos."
+        "descripcion": "Procesos visualmente satisfactorios, slime, arena, texturas y movimientos hipnóticos."
     },
     "roblox": {
         "nombre": "Roblox Obby",
-        "descripcion": "Gameplay colorido de obstáculos y recorridos."
+        "descripcion": "Gameplay colorido de obstáculos, plataformas y recorridos."
     },
     "cinematico": {
         "nombre": "Cinematográfico",
-        "descripcion": "Imágenes cinematográficas, misterio, suspenso y atmósferas oscuras."
+        "descripcion": "Escenas cinematográficas, misterio, suspenso y atmósferas dramáticas."
     },
 }
 
 
 def cargar_historial():
     if not os.path.exists(HISTORIAL):
-        return {"episodios": [], "temas": [], "estilos": []}
+        return {
+            "episodios": [],
+            "temas": [],
+            "estilos": [],
+        }
 
     try:
         with open(HISTORIAL, encoding="utf-8") as archivo:
             datos = json.load(archivo)
 
         if not isinstance(datos, dict):
-            raise ValueError("Historial inválido")
+            raise ValueError("Historial inválido.")
 
         for campo in ("episodios", "temas", "estilos"):
             if not isinstance(datos.get(campo), list):
@@ -68,21 +72,35 @@ def cargar_historial():
 
     except Exception as error:
         print(f"[AVISO] No se pudo leer el historial: {error}")
-        return {"episodios": [], "temas": [], "estilos": []}
+
+        return {
+            "episodios": [],
+            "temas": [],
+            "estilos": [],
+        }
 
 
 def guardar_historial(datos):
     temporal = HISTORIAL + ".tmp"
 
     with open(temporal, "w", encoding="utf-8") as archivo:
-        json.dump(datos, archivo, ensure_ascii=False, indent=2)
+        json.dump(
+            datos,
+            archivo,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     os.replace(temporal, HISTORIAL)
 
 
 def elegir_tema(historial):
     usados = historial.get("temas", [])
-    disponibles = [tema for tema in TEMAS if tema not in usados]
+
+    disponibles = [
+        tema for tema in TEMAS
+        if tema not in usados
+    ]
 
     if not disponibles:
         historial["temas"] = []
@@ -96,17 +114,25 @@ def elegir_estilo_visual(historial):
     usados = historial.get("estilos", [])
 
     recientes = usados[-2:]
-    disponibles = [e for e in estilos if e not in recientes]
+
+    disponibles = [
+        estilo for estilo in estilos
+        if estilo not in recientes
+    ]
 
     if not disponibles:
         disponibles = estilos.copy()
 
-    conteos = {e: usados.count(e) for e in disponibles}
+    conteos = {
+        estilo: usados.count(estilo)
+        for estilo in disponibles
+    }
+
     minimo = min(conteos.values())
 
     equilibrados = [
-        e for e in disponibles
-        if conteos[e] == minimo
+        estilo for estilo in disponibles
+        if conteos[estilo] == minimo
     ]
 
     return random.choice(equilibrados)
@@ -122,25 +148,36 @@ Crea un guion ORIGINAL para YouTube Shorts en español mexicano.
 TEMA: {tema}
 EPISODIO: {episodio} de 5
 ESTILO VISUAL: {nombre_estilo}
-DESCRIPCIÓN: {descripcion}
+DESCRIPCIÓN VISUAL: {descripcion}
 
-REQUISITOS:
-- Narración de 230 a 270 palabras.
-- Duración máxima absoluta: 178 segundos.
+REQUISITOS DE NARRACIÓN:
+- Entre 180 y 250 palabras.
+- Duración máxima absoluta de 178 segundos.
 - Gancho impactante durante los primeros 3 segundos.
 - Nada de saludos ni presentaciones.
-- Ritmo rápido y natural.
+- Ritmo rápido, natural y entretenido.
 - Mantén la curiosidad durante todo el relato.
-- Añade preguntas, tensión y cambios de ritmo.
+- Añade tensión, preguntas y cambios de ritmo.
 - Termina con una revelación o giro memorable.
 - No presentes ficción como si fuera un hecho real.
 - No inventes datos históricos o científicos.
 - Evita repetir estructuras y frases genéricas.
 - Si es una serie, conecta con el siguiente episodio.
-- Entre 6 y 8 escenas visuales.
-- Cada escena debe acompañar lo que se está narrando.
-- Las escenas deben tener movimiento y variedad.
-- No incluyas subtítulos ni logotipos en las escenas.
+- No cierres la historia antes de tiempo si es una parte intermedia.
+
+REQUISITOS VISUALES:
+- Crea entre 6 y 8 escenas.
+- Cada escena debe corresponder al fragmento exacto de narración.
+- Cada descripción visual debe ser concreta y fácil de buscar.
+- Describe objetos, lugares, personajes, acciones y movimientos.
+- Evita frases vagas como "algo misterioso" o "una escena interesante".
+- No repitas la misma descripción visual.
+- No incluyas letras, subtítulos ni logotipos dentro de la imagen.
+- Conserva el estilo visual elegido en todas las escenas.
+- La descripción visual debe mostrar algo que realmente se pueda ver.
+
+ESTILO VISUAL OBLIGATORIO:
+{nombre_estilo}
 
 Responde exclusivamente con JSON válido:
 
@@ -153,8 +190,8 @@ Responde exclusivamente con JSON válido:
   "narracion": "Narración completa",
   "escenas": [
     {{
-      "texto": "Fragmento de narración",
-      "visual": "Descripción concreta del fondo"
+      "texto": "Fragmento exacto de narración",
+      "visual": "Descripción visual específica y concreta"
     }}
   ]
 }}
@@ -180,22 +217,32 @@ def consultar_groq(prompt):
                         "role": "system",
                         "content": (
                             "Eres un guionista profesional de Shorts. "
-                            "Escribes en español mexicano, con originalidad, "
-                            "ritmo rápido y finales sorprendentes. "
+                            "Escribes en español mexicano con originalidad, "
+                            "ritmo rápido, escenas visuales concretas "
+                            "y finales sorprendentes. "
                             "Respondes exclusivamente JSON válido."
-                        )
+                        ),
                     },
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
                 ],
                 "temperature": 0.9,
                 "max_tokens": 3500,
-                "response_format": {"type": "json_object"},
+                "response_format": {
+                    "type": "json_object"
+                },
             },
             timeout=90,
         )
 
         respuesta.raise_for_status()
-        contenido = respuesta.json()["choices"][0]["message"]["content"]
+
+        contenido = respuesta.json()[
+            "choices"
+        ][0]["message"]["content"]
+
         return json.loads(contenido)
 
     except Exception as error:
@@ -233,7 +280,7 @@ def crear_guion_respaldo(tema, episodio, estilo):
     escenas = [
         {
             "texto": "Todo comenzó con algo aparentemente normal.",
-            "visual": "Escena dinámica relacionada con el tema."
+            "visual": "Plano dinámico que represente el tema de la historia."
         },
         {
             "texto": "Apareció una explicación sencilla.",
@@ -241,7 +288,7 @@ def crear_guion_respaldo(tema, episodio, estilo):
         },
         {
             "texto": "Un detalle no encajaba.",
-            "visual": "Acercamiento dramático a una pista."
+            "visual": "Acercamiento dramático a una pista importante."
         },
         {
             "texto": "Alguien decidió investigarlo.",
@@ -249,7 +296,7 @@ def crear_guion_respaldo(tema, episodio, estilo):
         },
         {
             "texto": "Cada respuesta provocaba otra pregunta.",
-            "visual": "Montaje rápido de imágenes relacionadas."
+            "visual": "Montaje rápido de escenas relacionadas."
         },
         {
             "texto": "La historia tomó un rumbo diferente.",
@@ -258,7 +305,7 @@ def crear_guion_respaldo(tema, episodio, estilo):
         {
             "texto": "Todavía existe una pregunta pendiente.",
             "visual": "Final intrigante con atmósfera de suspenso."
-        }
+        },
     ]
 
     return {
@@ -314,16 +361,21 @@ def obtener_guion_hoy():
     historial = cargar_historial()
     episodios = historial["episodios"]
 
-    # Solo se utilizan episodios que ya terminaron de renderizarse.
     if episodios:
         ultimo = episodios[-1]
 
         if ultimo.get("parte", 0) < 5:
-            tema = ultimo.get("titulo_serie", TEMAS[0])
+            tema = ultimo.get(
+                "titulo_serie",
+                TEMAS[0],
+            )
+
             episodio = ultimo.get("parte", 0) + 1
+
         else:
             tema = elegir_tema(historial)
             episodio = 1
+
     else:
         tema = elegir_tema(historial)
         episodio = 1
@@ -331,25 +383,29 @@ def obtener_guion_hoy():
     estilo = elegir_estilo_visual(historial)
 
     guion = consultar_groq(
-        crear_prompt(tema, episodio, estilo)
+        crear_prompt(
+            tema,
+            episodio,
+            estilo,
+        )
     )
 
     if not validar_guion(guion):
         print("[AVISO] Se utilizará el guion de respaldo.")
+
         guion = crear_guion_respaldo(
             tema,
             episodio,
             estilo,
         )
 
-    # El sistema conserva el tema, episodio y estilo elegidos.
     guion["titulo_serie"] = tema
     guion["parte"] = episodio
     guion["estilo_visual"] = estilo
 
     guion.setdefault(
         "gancho",
-        guion["narracion"].split(".")[0]
+        guion["narracion"].split(".")[0],
     )
 
     identificador = hashlib.sha256(
@@ -357,15 +413,17 @@ def obtener_guion_hoy():
     ).hexdigest()[:16]
 
     guion["id"] = identificador
-    guion["fecha"] = datetime.now(timezone.utc).isoformat()
 
-    # IMPORTANTE:
-    # Aquí todavía NO se guarda como episodio terminado.
-    # Se registra después de completar el renderizado.
+    guion["fecha"] = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     print(f"[GUION] {guion['titulo']}")
     print(f"[SERIE] {tema} - Parte {episodio}")
-    print(f"[ESTILO] {ESTILOS_VISUALES[estilo]['nombre']}")
+    print(
+        f"[ESTILO] "
+        f"{ESTILOS_VISUALES[estilo]['nombre']}"
+    )
 
     return guion
 
@@ -374,7 +432,9 @@ def registrar_guion_completado(guion):
     """Registra un episodio únicamente después de renderizarlo."""
 
     if not validar_guion(guion):
-        raise ValueError("No se puede registrar un guion inválido.")
+        raise ValueError(
+            "No se puede registrar un guion inválido."
+        )
 
     historial = cargar_historial()
     identificador = guion.get("id")
