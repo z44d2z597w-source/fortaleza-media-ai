@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 HISTORIAL = "historial.json"
-
 DURACION_MAXIMA = 178
+MAX_PARTES_SERIE = 5
 
 CATEGORIAS = {
     "drama": {
@@ -32,12 +32,11 @@ CATEGORIAS = {
 - Crea una historia emocional y atrapante.
 - Usa secretos, amistad, familia, confianza, celos,
   decisiones difíciles, perdón o sacrificios.
-- Puede haber tensión y conflictos, pero sin violencia gráfica.
+- Los conflictos deben ser apropiados para público familiar.
 - Los personajes deben tener motivaciones creíbles.
 - Incluye un giro inesperado que tenga sentido.
-- Termina con una emoción fuerte o una pregunta que invite
-  a comentar.
 - No conviertas todos los finales en tragedias.
+- Evita violencia gráfica y contenido adulto.
 """
     },
     "aventura": {
@@ -64,61 +63,52 @@ CATEGORIAS = {
 - El protagonista debe enfrentar un problema y buscar
   una solución ingeniosa.
 - Incluye una enseñanza natural sobre amistad, valentía,
-  respeto, bondad, confianza o trabajo en equipo.
+  respeto, bondad o trabajo en equipo.
 - Evita sustos fuertes, violencia gráfica y temas adultos.
 - Termina con una sorpresa emocionante o divertida.
 """
     },
 }
 
-ESTILOS_VISUALES = {
-    "cinematico": {
-        "nombre": "Cinematográfico narrativo",
-        "descripcion": (
-            "High quality cinematic storytelling scenes, "
-            "expressive characters, colorful environments, "
-            "dynamic camera movement and dramatic lighting."
-        )
+ESTILO_VISUAL = """
+Cinematic storytelling, expressive original characters,
+colorful detailed environments, dynamic camera movement,
+dramatic but family-friendly lighting, high visual quality.
+"""
+
+
+def historial_vacio():
+    return {
+        "episodios": [],
+        "temas": [],
+        "estilos": [],
+        "categorias": [],
     }
-}
 
 
 def cargar_historial():
     if not os.path.exists(HISTORIAL):
-        return {
-            "episodios": [],
-            "temas": [],
-            "estilos": [],
-            "categorias": [],
-        }
+        return historial_vacio()
 
     try:
         with open(HISTORIAL, encoding="utf-8") as archivo:
             datos = json.load(archivo)
 
         if not isinstance(datos, dict):
-            raise ValueError("Historial inválido.")
+            raise ValueError("El historial no contiene un objeto válido.")
 
-        for campo in (
-            "episodios",
-            "temas",
-            "estilos",
-            "categorias",
-        ):
-            if not isinstance(datos.get(campo), list):
-                datos[campo] = []
+        base = historial_vacio()
 
-        return datos
+        for campo in base:
+            if isinstance(datos.get(campo), list):
+                base[campo] = datos[campo]
+
+        return base
 
     except Exception as error:
-        print(f"[AVISO] No se pudo leer el historial: {error}")
-
-        return {
-            "episodios": [],
-            "temas": [],
-            "estilos": [],
-            "categorias": [],
-        }
+        raise RuntimeError(
+            f"No se pudo leer historial.json sin riesgo de perder datos: {error}"
+        )
 
 
 def guardar_historial(datos):
@@ -135,20 +125,51 @@ def guardar_historial(datos):
     os.replace(temporal, HISTORIAL)
 
 
-def elegir_categoria(historial):
-    usadas = historial.get("categorias", [])
-    ultima = usadas[-1] if usadas else None
+def obtener_episodios_nuevos(historial):
+    """
+    Ignora episodios antiguos que no tengan una categoría nueva válida.
+    No elimina ni modifica esos episodios.
+    """
+    episodios = historial.get("episodios", [])
 
-    disponibles = [
-        categoria
-        for categoria in CATEGORIAS
-        if categoria != ultima
+    return [
+        episodio
+        for episodio in episodios
+        if isinstance(episodio, dict)
+        and episodio.get("categoria") in CATEGORIAS
+        and episodio.get("titulo_serie")
     ]
 
-    if not disponibles:
-        disponibles = list(CATEGORIAS.keys())
 
-    return random.choice(disponibles)
+def elegir_categoria(historial):
+    episodios = obtener_episodios_nuevos(historial)
+
+    if episodios:
+        ultima_categoria = episodios[-1].get("categoria")
+
+        disponibles = [
+            categoria
+            for categoria in CATEGORIAS
+            if categoria != ultima_categoria
+        ]
+
+        return random.choice(disponibles)
+
+    categorias_guardadas = historial.get("categorias", [])
+
+    if categorias_guardadas:
+        ultima = categorias_guardadas[-1]
+
+        disponibles = [
+            categoria
+            for categoria in CATEGORIAS
+            if categoria != ultima
+        ]
+
+        if disponibles:
+            return random.choice(disponibles)
+
+    return random.choice(list(CATEGORIAS.keys()))
 
 
 def elegir_tema(categoria, historial):
@@ -166,16 +187,40 @@ def elegir_tema(categoria, historial):
     return random.choice(disponibles)
 
 
+def obtener_siguiente_episodio(historial):
+    episodios = obtener_episodios_nuevos(historial)
+
+    if episodios:
+        ultimo = episodios[-1]
+        parte = ultimo.get("parte", 0)
+
+        try:
+            parte = int(parte)
+        except (TypeError, ValueError):
+            parte = MAX_PARTES_SERIE
+
+        if 1 <= parte < MAX_PARTES_SERIE:
+            categoria = ultimo.get("categoria")
+            tema = ultimo.get("titulo_serie")
+
+            if categoria in CATEGORIAS and tema:
+                return categoria, tema, parte + 1
+
+    categoria = elegir_categoria(historial)
+    tema = elegir_tema(categoria, historial)
+
+    return categoria, tema, 1
+
+
 def crear_prompt(tema, episodio, categoria):
     datos = CATEGORIAS[categoria]
-    nombre_categoria = datos["nombre"]
 
     return f"""
 Crea un guion ORIGINAL para YouTube Shorts.
 
-CATEGORÍA: {nombre_categoria}
+CATEGORÍA: {datos["nombre"]}
 TEMA: {tema}
-EPISODIO: {episodio} de 5
+EPISODIO: {episodio} de {MAX_PARTES_SERIE}
 
 IDENTIDAD DEL CONTENIDO:
 {datos["reglas"]}
@@ -184,8 +229,7 @@ REQUISITOS DE NARRACIÓN:
 - Escribe entre 180 y 250 palabras.
 - Duración máxima absoluta: {DURACION_MAXIMA} segundos.
 - Español mexicano natural y fácil de entender.
-- Empieza directamente con un gancho impactante.
-- Los primeros 3 segundos deben despertar curiosidad.
+- Empieza con un gancho que atrape desde los primeros 3 segundos.
 - No uses saludos ni introducciones aburridas.
 - Mantén el interés durante toda la historia.
 - Incluye diálogos breves cuando ayuden a la emoción.
@@ -194,29 +238,30 @@ REQUISITOS DE NARRACIÓN:
 - No repitas frases genéricas.
 - No copies historias conocidas ni personajes protegidos.
 - Crea personajes y situaciones originales.
-- Si es una parte intermedia, conecta con el siguiente episodio.
+- Si es una parte intermedia, conecta con el episodio anterior.
 - No cierres toda la historia antes del episodio 5.
+- La parte 5 debe dar un cierre satisfactorio.
 
 REQUISITOS VISUALES:
 - Crea entre 6 y 8 escenas.
 - Cada escena debe corresponder al fragmento narrado.
 - El campo "texto" debe estar en español.
 - El campo "visual" DEBE estar en inglés.
-- Usa entre 5 y 10 palabras concretas en inglés.
-- Describe qué personaje aparece, qué hace y dónde está.
-- Describe acciones visibles, no emociones abstractas.
+- Usa descripciones concretas de personajes, acciones y lugares.
+- Describe qué aparece realmente en pantalla.
 - Cada escena debe tener una composición diferente.
 - Mantén los mismos personajes y su apariencia entre escenas.
-- No incluyas letras, subtítulos ni logotipos en la imagen.
+- No incluyas letras, subtítulos ni logotipos.
 - No uses imágenes aleatorias que no correspondan al relato.
+- Evita escenas abstractas difíciles de representar.
 
 ESTILO VISUAL:
-Cinematográfico narrativo.
-{ESTILOS_VISUALES["cinematico"]["descripcion"]}
+{ESTILO_VISUAL}
 
 IMPORTANTE:
 La categoría debe conservar su identidad.
 No mezcles drama emocional con aventura infantil.
+El contenido debe ser apropiado para público familiar.
 
 Responde exclusivamente con JSON válido:
 
@@ -257,13 +302,12 @@ def consultar_groq(prompt):
                         "role": "system",
                         "content": (
                             "Eres un guionista profesional de Shorts. "
-                            "Creas historias originales y muy entretenidas. "
+                            "Creas historias originales y entretenidas. "
                             "Respetas estrictamente la categoría solicitada. "
                             "Escribes en español mexicano natural. "
-                            "Las descripciones visuales deben estar en inglés, "
-                            "ser concretas y representar exactamente la escena. "
-                            "Conservas la apariencia de los personajes. "
-                            "Respondes exclusivamente JSON válido."
+                            "Las escenas visuales deben describir imágenes "
+                            "concretas en inglés. Mantienes la apariencia "
+                            "de los personajes y respondes solo JSON válido."
                         ),
                     },
                     {
@@ -323,31 +367,31 @@ def crear_guion_respaldo(tema, episodio, categoria):
         escenas = [
             {
                 "texto": "El protagonista encontró algo extraordinario.",
-                "visual": "Curious young fox discovering glowing treasure chest"
+                "visual": "Cute young fox discovering a glowing treasure chest"
             },
             {
                 "texto": "Una pista reveló una aventura más grande.",
-                "visual": "Small animal examining magical ancient map"
+                "visual": "Small animal examining a magical ancient map"
             },
             {
                 "texto": "Encontró obstáculos inesperados.",
-                "visual": "Colorful fantasy forest obstacle bridge"
+                "visual": "Colorful fantasy forest with a wooden obstacle bridge"
             },
             {
                 "texto": "Conoció a alguien que necesitaba ayuda.",
-                "visual": "Friendly cartoon animals meeting in forest"
+                "visual": "Friendly cartoon animals meeting in a forest clearing"
             },
             {
                 "texto": "Juntos encontraron una pista.",
-                "visual": "Two cute animal friends finding hidden key"
+                "visual": "Two cute animal friends finding a hidden golden key"
             },
             {
                 "texto": "Apareció un último desafío.",
-                "visual": "Magical mountain adventure glowing portal"
+                "visual": "Magical mountain adventure with a glowing portal"
             },
             {
                 "texto": "La aventura apenas estaba comenzando.",
-                "visual": "Happy animal friends exploring colorful fantasy world"
+                "visual": "Happy animal friends exploring a colorful fantasy world"
             },
         ]
 
@@ -379,27 +423,27 @@ def crear_guion_respaldo(tema, episodio, categoria):
         escenas = [
             {
                 "texto": "La historia comenzó con un secreto.",
-                "visual": "Young woman holding mysterious sealed letter"
+                "visual": "Young woman holding a mysterious sealed letter"
             },
             {
                 "texto": "Un pequeño detalle cambió todo.",
-                "visual": "Close up old family photograph on wooden table"
+                "visual": "Close up of an old family photograph on a wooden table"
             },
             {
                 "texto": "Alguien decidió investigar.",
-                "visual": "Person searching old documents in bedroom"
+                "visual": "Person searching through old documents in a bedroom"
             },
             {
                 "texto": "La respuesta le rompió el corazón.",
-                "visual": "Emotional young person sitting alone by window"
+                "visual": "Emotional young person sitting alone beside a window"
             },
             {
                 "texto": "Apareció un recuerdo inesperado.",
-                "visual": "Two childhood friends looking at old photograph"
+                "visual": "Two childhood friends looking at an old photograph"
             },
             {
                 "texto": "La historia cambió por completo.",
-                "visual": "Family members having emotional conversation at home"
+                "visual": "Family members having an emotional conversation at home"
             },
             {
                 "texto": "¿Habrías perdonado después de descubrirlo?",
@@ -455,7 +499,10 @@ def validar_guion(guion):
         if not isinstance(escena, dict):
             return False
 
-        if not escena.get("texto") or not escena.get("visual"):
+        if not isinstance(escena.get("texto"), str) or not escena["texto"].strip():
+            return False
+
+        if not isinstance(escena.get("visual"), str) or not escena["visual"].strip():
             return False
 
     return True
@@ -463,40 +510,20 @@ def validar_guion(guion):
 
 def obtener_guion_hoy():
     historial = cargar_historial()
-    episodios = historial["episodios"]
 
-    if episodios:
-        ultimo = episodios[-1]
+    categoria, tema, episodio = obtener_siguiente_episodio(historial)
 
-        if ultimo.get("parte", 0) < 5:
-            tema = ultimo.get(
-                "titulo_serie",
-                CATEGORIAS["drama"]["temas"][0],
-            )
+    print(f"[CATEGORÍA] {CATEGORIAS[categoria]['nombre']}")
+    print(f"[SERIE] {tema}")
+    print(f"[EPISODIO] {episodio} de {MAX_PARTES_SERIE}")
 
-            episodio = ultimo.get("parte", 0) + 1
-            categoria = ultimo.get("categoria", "drama")
-
-            if categoria not in CATEGORIAS:
-                categoria = "drama"
-
-        else:
-            categoria = elegir_categoria(historial)
-            tema = elegir_tema(categoria, historial)
-            episodio = 1
-
-    else:
-        categoria = elegir_categoria(historial)
-        tema = elegir_tema(categoria, historial)
-        episodio = 1
-
-    guion = consultar_groq(
-        crear_prompt(
-            tema,
-            episodio,
-            categoria,
-        )
+    prompt = crear_prompt(
+        tema,
+        episodio,
+        categoria,
     )
+
+    guion = consultar_groq(prompt)
 
     if not validar_guion(guion):
         print("[AVISO] Se utilizará el guion de respaldo.")
@@ -518,7 +545,7 @@ def obtener_guion_hoy():
     )
 
     identificador = hashlib.sha256(
-        f"{categoria}-{tema}-{episodio}-{guion['titulo']}".encode("utf-8")
+        f"{categoria}-{tema}-{episodio}".encode("utf-8")
     ).hexdigest()[:16]
 
     guion["id"] = identificador
@@ -527,35 +554,35 @@ def obtener_guion_hoy():
         timezone.utc
     ).isoformat()
 
-    print(f"[CATEGORÍA] {CATEGORIAS[categoria]['nombre']}")
     print(f"[GUION] {guion['titulo']}")
-    print(f"[SERIE] {tema} - Parte {episodio}")
 
     for numero, escena in enumerate(
         guion["escenas"],
         start=1,
     ):
-        print(
-            f"[VISUAL {numero}] {escena['visual']}"
-        )
+        print(f"[VISUAL {numero}] {escena['visual']}")
 
     return guion
 
 
 def registrar_guion_completado(guion):
-    """Registra un episodio únicamente después de renderizarlo."""
+    """Registra un episodio solo después de renderizarlo correctamente."""
 
     if not validar_guion(guion):
         raise ValueError(
             "No se puede registrar un guion inválido."
         )
 
+    if guion.get("categoria") not in CATEGORIAS:
+        raise ValueError("Categoría no reconocida.")
+
     historial = cargar_historial()
     identificador = guion.get("id")
 
-    if any(
+    if identificador and any(
         episodio.get("id") == identificador
         for episodio in historial["episodios"]
+        if isinstance(episodio, dict)
     ):
         print("[HISTORIAL] Este episodio ya estaba registrado.")
         return
