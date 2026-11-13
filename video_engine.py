@@ -32,19 +32,19 @@ TEMAS = [
 ESTILOS_VISUALES = {
     "minecraft": {
         "nombre": "Minecraft Parkour",
-        "descripcion": "Gameplay de parkour, saltos, obstáculos y recorridos dinámicos."
+        "descripcion": "Minecraft parkour gameplay, jumps, obstacles and dynamic routes."
     },
     "satisfactorio": {
         "nombre": "Videos satisfactorios",
-        "descripcion": "Procesos visualmente satisfactorios, slime, arena, texturas y movimientos hipnóticos."
+        "descripcion": "Satisfying visual processes, slime, kinetic sand, textures and hypnotic movements."
     },
     "roblox": {
         "nombre": "Roblox Obby",
-        "descripcion": "Gameplay colorido de obstáculos, plataformas y recorridos."
+        "descripcion": "Roblox obby gameplay, colorful obstacles, platforms and dynamic routes."
     },
     "cinematico": {
         "nombre": "Cinematográfico",
-        "descripcion": "Escenas cinematográficas, misterio, suspenso y atmósferas dramáticas."
+        "descripcion": "Cinematic scenes, mystery, suspense and dramatic atmospheres."
     },
 }
 
@@ -148,7 +148,7 @@ Crea un guion ORIGINAL para YouTube Shorts en español mexicano.
 TEMA: {tema}
 EPISODIO: {episodio} de 5
 ESTILO VISUAL: {nombre_estilo}
-DESCRIPCIÓN VISUAL: {descripcion}
+DESCRIPCIÓN DEL ESTILO: {descripcion}
 
 REQUISITOS DE NARRACIÓN:
 - Entre 180 y 250 palabras.
@@ -168,13 +168,19 @@ REQUISITOS DE NARRACIÓN:
 REQUISITOS VISUALES:
 - Crea entre 6 y 8 escenas.
 - Cada escena debe corresponder al fragmento exacto de narración.
-- Cada descripción visual debe ser concreta y fácil de buscar.
-- Describe objetos, lugares, personajes, acciones y movimientos.
-- Evita frases vagas como "algo misterioso" o "una escena interesante".
+- El campo "texto" debe estar en español y corresponder a la narración.
+- El campo "visual" DEBE estar escrito en INGLÉS.
+- La descripción visual debe ser concreta, breve y fácil de buscar en Pixabay.
+- Usa entre 4 y 9 palabras útiles en inglés por descripción.
+- Describe objetos, lugares, acciones, movimientos y detalles visibles.
+- Escribe términos que puedan aparecer en una búsqueda de videos.
+- No uses frases abstractas como "mystery", "something strange" o "interesting scene" sin describir qué se ve.
 - No repitas la misma descripción visual.
 - No incluyas letras, subtítulos ni logotipos dentro de la imagen.
+- Cada escena debe tener una imagen o acción distinta.
 - Conserva el estilo visual elegido en todas las escenas.
-- La descripción visual debe mostrar algo que realmente se pueda ver.
+- Relaciona el fondo con lo que está contando la narración.
+- No uses un gato, paisaje o persona aleatoria si no tiene relación con la escena.
 
 ESTILO VISUAL OBLIGATORIO:
 {nombre_estilo}
@@ -186,12 +192,12 @@ Responde exclusivamente con JSON válido:
   "titulo": "Título atractivo",
   "parte": {episodio},
   "estilo_visual": "{estilo}",
-  "gancho": "Frase impactante",
-  "narracion": "Narración completa",
+  "gancho": "Frase impactante en español",
+  "narracion": "Narración completa en español mexicano",
   "escenas": [
     {{
-      "texto": "Fragmento exacto de narración",
-      "visual": "Descripción visual específica y concreta"
+      "texto": "Fragmento exacto de narración en español",
+      "visual": "Specific searchable visual description in English"
     }}
   ]
 }}
@@ -217,9 +223,11 @@ def consultar_groq(prompt):
                         "role": "system",
                         "content": (
                             "Eres un guionista profesional de Shorts. "
-                            "Escribes en español mexicano con originalidad, "
-                            "ritmo rápido, escenas visuales concretas "
-                            "y finales sorprendentes. "
+                            "Escribes narraciones en español mexicano. "
+                            "Las descripciones visuales de cada escena "
+                            "deben estar en inglés, ser concretas, "
+                            "cortas y buscables en bancos de videos. "
+                            "Relacionas cada fondo con la narración. "
                             "Respondes exclusivamente JSON válido."
                         ),
                     },
@@ -280,31 +288,31 @@ def crear_guion_respaldo(tema, episodio, estilo):
     escenas = [
         {
             "texto": "Todo comenzó con algo aparentemente normal.",
-            "visual": "Plano dinámico que represente el tema de la historia."
+            "visual": "Mysterious abandoned building exterior"
         },
         {
             "texto": "Apareció una explicación sencilla.",
-            "visual": "Movimiento visual que represente una primera explicación."
+            "visual": "Person examining old photographs"
         },
         {
             "texto": "Un detalle no encajaba.",
-            "visual": "Acercamiento dramático a una pista importante."
+            "visual": "Close up mysterious object on table"
         },
         {
             "texto": "Alguien decidió investigarlo.",
-            "visual": "Escena de investigación y descubrimiento."
+            "visual": "Detective investigating dark room"
         },
         {
             "texto": "Cada respuesta provocaba otra pregunta.",
-            "visual": "Montaje rápido de escenas relacionadas."
+            "visual": "Old documents and photographs investigation"
         },
         {
             "texto": "La historia tomó un rumbo diferente.",
-            "visual": "Revelación visual inesperada."
+            "visual": "Dramatic dark hallway cinematic scene"
         },
         {
             "texto": "Todavía existe una pregunta pendiente.",
-            "visual": "Final intrigante con atmósfera de suspenso."
+            "visual": "Foggy forest mysterious cinematic atmosphere"
         },
     ]
 
@@ -424,6 +432,14 @@ def obtener_guion_hoy():
         f"[ESTILO] "
         f"{ESTILOS_VISUALES[estilo]['nombre']}"
     )
+
+    for numero, escena in enumerate(
+        guion["escenas"],
+        start=1,
+    ):
+        print(
+            f"[VISUAL {numero}] {escena['visual']}"
+        )
 
     return guion
 
