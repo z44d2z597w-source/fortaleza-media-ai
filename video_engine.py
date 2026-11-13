@@ -11,41 +11,75 @@ HISTORIAL = "historial.json"
 
 DURACION_MAXIMA = 178
 
-TEMAS = [
-    "Misterios inexplicables",
-    "Historias de terror psicológico",
-    "Casos extraños",
-    "Secretos de la historia",
-    "Ciencia sorprendente",
-    "Misterios del océano",
-    "Historias de supervivencia",
-    "Fenómenos inexplicables",
-    "Leyendas urbanas",
-    "Experimentos científicos",
-    "Historias sorprendentes",
-    "Historias de humor",
-    "Situaciones inesperadas",
-    "Curiosidades del mundo",
-    "Historias con finales inesperados",
-]
+CATEGORIAS = {
+    "drama": {
+        "nombre": "DRAMA EMOCIONAL",
+        "temas": [
+            "El secreto que destruyó una amistad",
+            "La hermana que ocultaba una verdad",
+            "El mejor amigo que traicionó su promesa",
+            "La carta que llegó demasiado tarde",
+            "La familia que guardaba un secreto",
+            "El niño al que nadie quería escuchar",
+            "La promesa que cambió dos vidas",
+            "La verdad detrás de una fotografía",
+            "El regalo que nadie esperaba",
+            "La persona que regresó cuando todos la daban por perdida",
+            "La mentira que separó a dos hermanos",
+            "El sacrificio que nadie conocía",
+        ],
+        "reglas": """
+- Crea una historia emocional y atrapante.
+- Usa secretos, amistad, familia, confianza, celos,
+  decisiones difíciles, perdón o sacrificios.
+- Puede haber tensión y conflictos, pero sin violencia gráfica.
+- Los personajes deben tener motivaciones creíbles.
+- Incluye un giro inesperado que tenga sentido.
+- Termina con una emoción fuerte o una pregunta que invite
+  a comentar.
+- No conviertas todos los finales en tragedias.
+"""
+    },
+    "aventura": {
+        "nombre": "AVENTURA INFANTIL",
+        "temas": [
+            "El pequeño zorro que encontró una puerta mágica",
+            "La tortuga que quería llegar a las estrellas",
+            "El dragón que tenía miedo de volar",
+            "La aventura del perro que podía hablar",
+            "El bosque donde los animales guardaban un secreto",
+            "El mapa escondido dentro de una botella",
+            "La niña que encontró una ciudad diminuta",
+            "El robot que quería tener un amigo",
+            "El pingüino que perdió su hogar",
+            "La isla de los juguetes olvidados",
+            "El gato que descubrió un mundo secreto",
+            "La carrera para salvar el árbol mágico",
+        ],
+        "reglas": """
+- Crea una aventura divertida, emocionante y apta para niños.
+- Usa animales con personalidad, personajes fantásticos,
+  mundos sorprendentes, retos y descubrimientos.
+- Incluye humor, imaginación y suspenso apropiado.
+- El protagonista debe enfrentar un problema y buscar
+  una solución ingeniosa.
+- Incluye una enseñanza natural sobre amistad, valentía,
+  respeto, bondad, confianza o trabajo en equipo.
+- Evita sustos fuertes, violencia gráfica y temas adultos.
+- Termina con una sorpresa emocionante o divertida.
+"""
+    },
+}
 
 ESTILOS_VISUALES = {
-    "minecraft": {
-        "nombre": "Minecraft Parkour",
-        "descripcion": "Minecraft parkour gameplay, jumps, obstacles and dynamic routes."
-    },
-    "satisfactorio": {
-        "nombre": "Videos satisfactorios",
-        "descripcion": "Satisfying visual processes, slime, kinetic sand, textures and hypnotic movements."
-    },
-    "roblox": {
-        "nombre": "Roblox Obby",
-        "descripcion": "Roblox obby gameplay, colorful obstacles, platforms and dynamic routes."
-    },
     "cinematico": {
-        "nombre": "Cinematográfico",
-        "descripcion": "Cinematic scenes, mystery, suspense and dramatic atmospheres."
-    },
+        "nombre": "Cinematográfico narrativo",
+        "descripcion": (
+            "High quality cinematic storytelling scenes, "
+            "expressive characters, colorful environments, "
+            "dynamic camera movement and dramatic lighting."
+        )
+    }
 }
 
 
@@ -55,6 +89,7 @@ def cargar_historial():
             "episodios": [],
             "temas": [],
             "estilos": [],
+            "categorias": [],
         }
 
     try:
@@ -64,7 +99,12 @@ def cargar_historial():
         if not isinstance(datos, dict):
             raise ValueError("Historial inválido.")
 
-        for campo in ("episodios", "temas", "estilos"):
+        for campo in (
+            "episodios",
+            "temas",
+            "estilos",
+            "categorias",
+        ):
             if not isinstance(datos.get(campo), list):
                 datos[campo] = []
 
@@ -77,6 +117,7 @@ def cargar_historial():
             "episodios": [],
             "temas": [],
             "estilos": [],
+            "categorias": [],
         }
 
 
@@ -94,110 +135,103 @@ def guardar_historial(datos):
     os.replace(temporal, HISTORIAL)
 
 
-def elegir_tema(historial):
-    usados = historial.get("temas", [])
+def elegir_categoria(historial):
+    usadas = historial.get("categorias", [])
+    ultima = usadas[-1] if usadas else None
 
     disponibles = [
-        tema for tema in TEMAS
-        if tema not in usados
+        categoria
+        for categoria in CATEGORIAS
+        if categoria != ultima
     ]
 
     if not disponibles:
-        historial["temas"] = []
-        disponibles = TEMAS.copy()
+        disponibles = list(CATEGORIAS.keys())
 
     return random.choice(disponibles)
 
 
-def elegir_estilo_visual(historial):
-    estilos = list(ESTILOS_VISUALES.keys())
-    usados = historial.get("estilos", [])
-
-    recientes = usados[-2:]
+def elegir_tema(categoria, historial):
+    temas = CATEGORIAS[categoria]["temas"]
+    usados = historial.get("temas", [])
 
     disponibles = [
-        estilo for estilo in estilos
-        if estilo not in recientes
+        tema for tema in temas
+        if tema not in usados
     ]
 
     if not disponibles:
-        disponibles = estilos.copy()
+        disponibles = temas.copy()
 
-    conteos = {
-        estilo: usados.count(estilo)
-        for estilo in disponibles
-    }
-
-    minimo = min(conteos.values())
-
-    equilibrados = [
-        estilo for estilo in disponibles
-        if conteos[estilo] == minimo
-    ]
-
-    return random.choice(equilibrados)
+    return random.choice(disponibles)
 
 
-def crear_prompt(tema, episodio, estilo):
-    nombre_estilo = ESTILOS_VISUALES[estilo]["nombre"]
-    descripcion = ESTILOS_VISUALES[estilo]["descripcion"]
+def crear_prompt(tema, episodio, categoria):
+    datos = CATEGORIAS[categoria]
+    nombre_categoria = datos["nombre"]
 
     return f"""
-Crea un guion ORIGINAL para YouTube Shorts en español mexicano.
+Crea un guion ORIGINAL para YouTube Shorts.
 
+CATEGORÍA: {nombre_categoria}
 TEMA: {tema}
 EPISODIO: {episodio} de 5
-ESTILO VISUAL: {nombre_estilo}
-DESCRIPCIÓN DEL ESTILO: {descripcion}
+
+IDENTIDAD DEL CONTENIDO:
+{datos["reglas"]}
 
 REQUISITOS DE NARRACIÓN:
-- Entre 180 y 250 palabras.
-- Duración máxima absoluta de 178 segundos.
-- Gancho impactante durante los primeros 3 segundos.
-- Nada de saludos ni presentaciones.
-- Ritmo rápido, natural y entretenido.
-- Mantén la curiosidad durante todo el relato.
-- Añade tensión, preguntas y cambios de ritmo.
-- Termina con una revelación o giro memorable.
-- No presentes ficción como si fuera un hecho real.
-- No inventes datos históricos o científicos.
-- Evita repetir estructuras y frases genéricas.
-- Si es una serie, conecta con el siguiente episodio.
-- No cierres la historia antes de tiempo si es una parte intermedia.
+- Escribe entre 180 y 250 palabras.
+- Duración máxima absoluta: {DURACION_MAXIMA} segundos.
+- Español mexicano natural y fácil de entender.
+- Empieza directamente con un gancho impactante.
+- Los primeros 3 segundos deben despertar curiosidad.
+- No uses saludos ni introducciones aburridas.
+- Mantén el interés durante toda la historia.
+- Incluye diálogos breves cuando ayuden a la emoción.
+- Añade cambios de ritmo y detalles sorprendentes.
+- El final debe dejar una emoción o una pregunta memorable.
+- No repitas frases genéricas.
+- No copies historias conocidas ni personajes protegidos.
+- Crea personajes y situaciones originales.
+- Si es una parte intermedia, conecta con el siguiente episodio.
+- No cierres toda la historia antes del episodio 5.
 
 REQUISITOS VISUALES:
 - Crea entre 6 y 8 escenas.
-- Cada escena debe corresponder al fragmento exacto de narración.
-- El campo "texto" debe estar en español y corresponder a la narración.
-- El campo "visual" DEBE estar escrito en INGLÉS.
-- La descripción visual debe ser concreta, breve y fácil de buscar en Pixabay.
-- Usa entre 4 y 9 palabras útiles en inglés por descripción.
-- Describe objetos, lugares, acciones, movimientos y detalles visibles.
-- Escribe términos que puedan aparecer en una búsqueda de videos.
-- No uses frases abstractas como "mystery", "something strange" o "interesting scene" sin describir qué se ve.
-- No repitas la misma descripción visual.
-- No incluyas letras, subtítulos ni logotipos dentro de la imagen.
-- Cada escena debe tener una imagen o acción distinta.
-- Conserva el estilo visual elegido en todas las escenas.
-- Relaciona el fondo con lo que está contando la narración.
-- No uses un gato, paisaje o persona aleatoria si no tiene relación con la escena.
+- Cada escena debe corresponder al fragmento narrado.
+- El campo "texto" debe estar en español.
+- El campo "visual" DEBE estar en inglés.
+- Usa entre 5 y 10 palabras concretas en inglés.
+- Describe qué personaje aparece, qué hace y dónde está.
+- Describe acciones visibles, no emociones abstractas.
+- Cada escena debe tener una composición diferente.
+- Mantén los mismos personajes y su apariencia entre escenas.
+- No incluyas letras, subtítulos ni logotipos en la imagen.
+- No uses imágenes aleatorias que no correspondan al relato.
 
-ESTILO VISUAL OBLIGATORIO:
-{nombre_estilo}
+ESTILO VISUAL:
+Cinematográfico narrativo.
+{ESTILOS_VISUALES["cinematico"]["descripcion"]}
+
+IMPORTANTE:
+La categoría debe conservar su identidad.
+No mezcles drama emocional con aventura infantil.
 
 Responde exclusivamente con JSON válido:
 
 {{
+  "categoria": "{categoria}",
   "titulo_serie": "{tema}",
   "titulo": "Título atractivo",
   "parte": {episodio},
-  "estilo_visual": "{estilo}",
-  "gancho": "Frase impactante en español",
+  "estilo_visual": "cinematico",
+  "gancho": "Frase inicial impactante",
   "narracion": "Narración completa en español mexicano",
   "escenas": [
     {{
-      "texto": "Fragmento exacto de narración en español",
-      "visual": "Specific searchable visual description in English"
+      "texto": "Fragmento de narración en español",
+      "visual": "Specific visible cinematic scene in English"
     }}
   ]
 }}
@@ -223,11 +257,12 @@ def consultar_groq(prompt):
                         "role": "system",
                         "content": (
                             "Eres un guionista profesional de Shorts. "
-                            "Escribes narraciones en español mexicano. "
-                            "Las descripciones visuales de cada escena "
-                            "deben estar en inglés, ser concretas, "
-                            "cortas y buscables en bancos de videos. "
-                            "Relacionas cada fondo con la narración. "
+                            "Creas historias originales y muy entretenidas. "
+                            "Respetas estrictamente la categoría solicitada. "
+                            "Escribes en español mexicano natural. "
+                            "Las descripciones visuales deben estar en inglés, "
+                            "ser concretas y representar exactamente la escena. "
+                            "Conservas la apariencia de los personajes. "
                             "Respondes exclusivamente JSON válido."
                         ),
                     },
@@ -258,70 +293,127 @@ def consultar_groq(prompt):
         return None
 
 
-def crear_guion_respaldo(tema, episodio, estilo):
-    narracion = (
-        f"Hay un detalle sobre {tema.lower()} que podría cambiar "
-        "completamente la manera en que entiendes esta historia. "
-        "Todo comenzó con algo que parecía normal. Nadie imaginaba "
-        "que aquel pequeño acontecimiento terminaría convirtiéndose "
-        "en una situación imposible de ignorar. "
-        "Al principio apareció una explicación sencilla. Parecía "
-        "resolver todas las dudas, pero había un problema: un detalle "
-        "no encajaba. Cuando alguien decidió investigarlo, encontró "
-        "una pista que había pasado desapercibida. "
-        "Esa pista abrió una nueva posibilidad y, de repente, "
-        "lo que parecía una historia común se convirtió en algo "
-        "mucho más extraño. Cada respuesta provocaba otra pregunta. "
-        "Algunos pensaron que todo era una coincidencia. Otros "
-        "creyeron que existía algo más detrás de lo ocurrido. "
-        "Pero había una pieza que todavía faltaba. "
-        "Cuando esa pieza apareció, la historia tomó un rumbo "
-        "completamente diferente. Lo más sorprendente no fue lo "
-        "que ocurrió al principio, sino lo que se descubrió después. "
-        "Y aquí está el detalle que casi todos pasan por alto: "
-        "la primera pista siempre estuvo frente a nosotros. "
-        "A veces, la explicación más evidente no es la correcta. "
-        "¿Tú qué crees que ocurrió realmente? "
-        "Porque esta historia todavía tiene una pregunta pendiente."
-    )
+def crear_guion_respaldo(tema, episodio, categoria):
+    if categoria == "aventura":
+        narracion = (
+            f"¡Nadie podía creer lo que acababa de encontrar! "
+            f"Todo comenzó cuando el protagonista descubrió algo "
+            f"extraordinario relacionado con {tema.lower()}. "
+            "Al principio parecía una simple coincidencia, "
+            "pero una pequeña pista reveló que aquello escondía "
+            "una aventura mucho más grande. "
+            "Decidió investigar, aunque sabía que no sería fácil. "
+            "En el camino encontró obstáculos inesperados y "
+            "conoció a alguien que necesitaba ayuda. "
+            "Podía continuar solo o detenerse para ayudar. "
+            "Eligió ayudar, y esa decisión cambió todo. "
+            "Juntos encontraron una pista que nadie había visto. "
+            "Pero justo cuando pensaban que habían resuelto "
+            "el misterio, apareció un último desafío. "
+            "Tuvieron que usar su ingenio, confiar el uno en el otro "
+            "y trabajar en equipo. "
+            "Finalmente descubrieron que el verdadero tesoro "
+            "no era lo que estaban buscando, sino lo que habían "
+            "aprendido durante el camino. "
+            "Y todavía quedaba una sorpresa: aquella aventura "
+            "apenas estaba comenzando. "
+            "¿Te atreverías a descubrir qué viene después?"
+        )
 
-    escenas = [
-        {
-            "texto": "Todo comenzó con algo aparentemente normal.",
-            "visual": "Mysterious abandoned building exterior"
-        },
-        {
-            "texto": "Apareció una explicación sencilla.",
-            "visual": "Person examining old photographs"
-        },
-        {
-            "texto": "Un detalle no encajaba.",
-            "visual": "Close up mysterious object on table"
-        },
-        {
-            "texto": "Alguien decidió investigarlo.",
-            "visual": "Detective investigating dark room"
-        },
-        {
-            "texto": "Cada respuesta provocaba otra pregunta.",
-            "visual": "Old documents and photographs investigation"
-        },
-        {
-            "texto": "La historia tomó un rumbo diferente.",
-            "visual": "Dramatic dark hallway cinematic scene"
-        },
-        {
-            "texto": "Todavía existe una pregunta pendiente.",
-            "visual": "Foggy forest mysterious cinematic atmosphere"
-        },
-    ]
+        escenas = [
+            {
+                "texto": "El protagonista encontró algo extraordinario.",
+                "visual": "Curious young fox discovering glowing treasure chest"
+            },
+            {
+                "texto": "Una pista reveló una aventura más grande.",
+                "visual": "Small animal examining magical ancient map"
+            },
+            {
+                "texto": "Encontró obstáculos inesperados.",
+                "visual": "Colorful fantasy forest obstacle bridge"
+            },
+            {
+                "texto": "Conoció a alguien que necesitaba ayuda.",
+                "visual": "Friendly cartoon animals meeting in forest"
+            },
+            {
+                "texto": "Juntos encontraron una pista.",
+                "visual": "Two cute animal friends finding hidden key"
+            },
+            {
+                "texto": "Apareció un último desafío.",
+                "visual": "Magical mountain adventure glowing portal"
+            },
+            {
+                "texto": "La aventura apenas estaba comenzando.",
+                "visual": "Happy animal friends exploring colorful fantasy world"
+            },
+        ]
+
+    else:
+        narracion = (
+            f"¡Lo que descubrió cambió todo para siempre! "
+            f"La historia comenzó con un secreto relacionado "
+            f"con {tema.lower()}. "
+            "Durante mucho tiempo, nadie se atrevió a hablar "
+            "de lo que realmente había ocurrido. "
+            "Pero un pequeño detalle hizo que todo empezara "
+            "a parecer diferente. "
+            "Una persona decidió investigar y encontró una pista "
+            "que no esperaba. "
+            "Cuando preguntó la verdad, recibió una respuesta "
+            "que le rompió el corazón. "
+            "Podía marcharse para siempre o escuchar una explicación. "
+            "Decidió escuchar, aunque sabía que podía salir lastimada. "
+            "Entonces apareció un recuerdo que nadie había mencionado. "
+            "Aquello cambió por completo la historia. "
+            "Lo que parecía una traición escondía una decisión "
+            "difícil que nadie había comprendido. "
+            "Pero todavía faltaba conocer la verdad más importante. "
+            "A veces, las personas que más queremos también "
+            "cometen errores que deben aprender a reparar. "
+            "¿Tú habrías perdonado después de descubrirlo?"
+        )
+
+        escenas = [
+            {
+                "texto": "La historia comenzó con un secreto.",
+                "visual": "Young woman holding mysterious sealed letter"
+            },
+            {
+                "texto": "Un pequeño detalle cambió todo.",
+                "visual": "Close up old family photograph on wooden table"
+            },
+            {
+                "texto": "Alguien decidió investigar.",
+                "visual": "Person searching old documents in bedroom"
+            },
+            {
+                "texto": "La respuesta le rompió el corazón.",
+                "visual": "Emotional young person sitting alone by window"
+            },
+            {
+                "texto": "Apareció un recuerdo inesperado.",
+                "visual": "Two childhood friends looking at old photograph"
+            },
+            {
+                "texto": "La historia cambió por completo.",
+                "visual": "Family members having emotional conversation at home"
+            },
+            {
+                "texto": "¿Habrías perdonado después de descubrirlo?",
+                "visual": "Two friends reconciling in warm sunset light"
+            },
+        ]
 
     return {
+        "categoria": categoria,
         "titulo_serie": tema,
-        "titulo": f"Una historia que te hará dudar - Parte {episodio}",
+        "titulo": f"{tema} - Parte {episodio}",
         "parte": episodio,
-        "estilo_visual": estilo,
-        "gancho": "Hay un detalle que podría cambiarlo todo.",
+        "estilo_visual": "cinematico",
+        "gancho": narracion.split(".")[0],
         "narracion": narracion,
         "escenas": escenas,
     }
@@ -332,6 +424,7 @@ def validar_guion(guion):
         return False
 
     obligatorios = [
+        "categoria",
         "titulo_serie",
         "titulo",
         "narracion",
@@ -339,6 +432,9 @@ def validar_guion(guion):
     ]
 
     if not all(campo in guion for campo in obligatorios):
+        return False
+
+    if guion.get("categoria") not in CATEGORIAS:
         return False
 
     if not isinstance(guion["narracion"], str):
@@ -375,26 +471,30 @@ def obtener_guion_hoy():
         if ultimo.get("parte", 0) < 5:
             tema = ultimo.get(
                 "titulo_serie",
-                TEMAS[0],
+                CATEGORIAS["drama"]["temas"][0],
             )
 
             episodio = ultimo.get("parte", 0) + 1
+            categoria = ultimo.get("categoria", "drama")
+
+            if categoria not in CATEGORIAS:
+                categoria = "drama"
 
         else:
-            tema = elegir_tema(historial)
+            categoria = elegir_categoria(historial)
+            tema = elegir_tema(categoria, historial)
             episodio = 1
 
     else:
-        tema = elegir_tema(historial)
+        categoria = elegir_categoria(historial)
+        tema = elegir_tema(categoria, historial)
         episodio = 1
-
-    estilo = elegir_estilo_visual(historial)
 
     guion = consultar_groq(
         crear_prompt(
             tema,
             episodio,
-            estilo,
+            categoria,
         )
     )
 
@@ -404,12 +504,13 @@ def obtener_guion_hoy():
         guion = crear_guion_respaldo(
             tema,
             episodio,
-            estilo,
+            categoria,
         )
 
+    guion["categoria"] = categoria
     guion["titulo_serie"] = tema
     guion["parte"] = episodio
-    guion["estilo_visual"] = estilo
+    guion["estilo_visual"] = "cinematico"
 
     guion.setdefault(
         "gancho",
@@ -417,7 +518,7 @@ def obtener_guion_hoy():
     )
 
     identificador = hashlib.sha256(
-        f"{tema}-{episodio}-{guion['titulo']}".encode("utf-8")
+        f"{categoria}-{tema}-{episodio}-{guion['titulo']}".encode("utf-8")
     ).hexdigest()[:16]
 
     guion["id"] = identificador
@@ -426,12 +527,9 @@ def obtener_guion_hoy():
         timezone.utc
     ).isoformat()
 
+    print(f"[CATEGORÍA] {CATEGORIAS[categoria]['nombre']}")
     print(f"[GUION] {guion['titulo']}")
     print(f"[SERIE] {tema} - Parte {episodio}")
-    print(
-        f"[ESTILO] "
-        f"{ESTILOS_VISUALES[estilo]['nombre']}"
-    )
 
     for numero, escena in enumerate(
         guion["escenas"],
@@ -466,16 +564,21 @@ def registrar_guion_completado(guion):
 
     tema = guion.get("titulo_serie")
     estilo = guion.get("estilo_visual")
+    categoria = guion.get("categoria")
 
     if tema and tema not in historial["temas"]:
         historial["temas"].append(tema)
 
-    if estilo in ESTILOS_VISUALES:
+    if estilo:
         historial["estilos"].append(estilo)
+
+    if categoria in CATEGORIAS:
+        historial["categorias"].append(categoria)
 
     historial["episodios"] = historial["episodios"][-100:]
     historial["temas"] = historial["temas"][-100:]
     historial["estilos"] = historial["estilos"][-100:]
+    historial["categorias"] = historial["categorias"][-100:]
 
     guardar_historial(historial)
 
