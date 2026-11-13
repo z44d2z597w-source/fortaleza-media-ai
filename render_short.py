@@ -6,16 +6,17 @@ import random
 import asyncio
 import subprocess
 import hashlib
+import shutil
+import time
 from pathlib import Path
-from urllib.parse import quote
 
 import requests
 import edge_tts
 
 
 # ==========================================
-# FORTALEZA MEDIA AI — MOTOR VISUAL 3.0
-# CUATRO ESTILOS VISUALES ROTATIVOS
+# FORTALEZA MEDIA AI
+# MOTOR VISUAL CON REINTENTOS Y RESPALDOS
 # ==========================================
 
 ANCHO = 1080
@@ -226,6 +227,10 @@ def buscar_videos_pixabay(termino, usados):
     return nuevos + repetidos
 
 
+# ==========================================
+# SELECCIÓN DE CLIPS CON ALTERNATIVAS
+# ==========================================
+
 def seleccionar_clips(estilo, cantidad):
     usados = cargar_fondos_usados()
     terminos = ESTILOS[estilo].copy()
@@ -233,6 +238,7 @@ def seleccionar_clips(estilo, cantidad):
 
     encontrados = {}
     repetidos = []
+    objetivo = cantidad + 6
 
     for termino in terminos:
         print(f"[PIXABAY] Buscando: {termino}")
@@ -254,7 +260,7 @@ def seleccionar_clips(estilo, cantidad):
                 else:
                     encontrados[identificador] = video
 
-            if len(encontrados) >= cantidad:
+            if len(encontrados) >= objetivo:
                 break
 
         except Exception as error:
@@ -263,7 +269,7 @@ def seleccionar_clips(estilo, cantidad):
     clips = list(encontrados.values())
     random.shuffle(clips)
 
-    if len(clips) < cantidad:
+    if len(clips) < objetivo:
         disponibles = [
             clip for clip in repetidos
             if clip["id"] not in {
@@ -276,38 +282,111 @@ def seleccionar_clips(estilo, cantidad):
 
     if not clips:
         raise RuntimeError(
-            f"No se encontraron videos para el estilo {estilo}. "
-            "No se utilizará un fondo estático."
+            f"No se encontraron videos para el estilo {estilo}."
         )
 
-    # Se pueden repetir clips solo si el catálogo es insuficiente.
-    while len(clips) < cantidad:
-        clips.append(random.choice(clips))
+    print(
+        f"[PIXABAY] {len(clips)} clips candidatos disponibles."
+    )
 
-    return clips[:cantidad]
+    return clips
 
+
+# ==========================================
+# DESCARGA CON REINTENTOS PARA ERROR 429
+# ==========================================
 
 def descargar_video(url, destino):
-    respuesta = requests.get(
-        url,
-        stream=True,
-        timeout=90,
+    temporal = destino.with_suffix(
+        destino.suffix + ".part"
     )
-    respuesta.raise_for_status()
 
-    with open(destino, "wb") as archivo:
-        for bloque in respuesta.iter_content(
-            chunk_size=1024 * 1024
-        ):
-            if bloque:
-                archivo.write(bloque)
+    ultimo_error = None
 
-    if (
-        not destino.exists()
-        or destino.stat().st_size < 10000
-    ):
-        raise RuntimeError("Video descargado vacío o incompleto.")
+    for intento in range(1, 5):
+        espera = min(8 * intento, 30)
 
+        try:
+            print(
+                f"[DESCARGA] Intento {intento}/4: "
+                f"{destino.name}"
+            )
+
+            with requests.get(
+                url,
+                stream=True,
+                timeout=(20, 120),
+                headers={
+                    "User-Agent": "Mozilla/5.0"
+                },
+            ) as respuesta:
+
+                if respuesta.status_code == 429:
+                    retry_after = respuesta.headers.get(
+                        "Retry-After"
+                    )
+
+                    try:
+                        espera = min(
+                            max(int(retry_after), 1),
+                            60,
+                        )
+                    except (TypeError, ValueError):
+                        espera = min(10 * intento, 45)
+
+                    raise requests.exceptions.HTTPError(
+                        "Pixabay limitó temporalmente la descarga "
+                        "(429).",
+                        response=respuesta,
+                    )
+
+                respuesta.raise_for_status()
+
+                with open(temporal, "wb") as archivo:
+                    for bloque in respuesta.iter_content(
+                        chunk_size=512 * 1024
+                    ):
+                        if bloque:
+                            archivo.write(bloque)
+
+            if (
+                not temporal.exists()
+                or temporal.stat().st_size < 10000
+            ):
+                raise RuntimeError(
+                    "Video descargado vacío o incompleto."
+                )
+
+            temporal.replace(destino)
+
+            print(
+                f"[DESCARGA OK] "
+                f"{destino.stat().st_size / 1024 / 1024:.2f} MB"
+            )
+
+            return
+
+        except Exception as error:
+            ultimo_error = error
+            temporal.unlink(missing_ok=True)
+
+            if intento < 4:
+                print(
+                    f"[AVISO] Descarga fallida: {error}. "
+                    f"Nuevo intento en {espera} segundos."
+                )
+
+                time.sleep(espera)
+
+    raise RuntimeError(
+        "No se pudo descargar el video después de 4 intentos: "
+        f"{ultimo_error}"
+    )
+
+
+# ==========================================
+# PREPARACIÓN DE VIDEO VERTICAL
+# ==========================================
 
 def preparar_video(origen, destino, duracion):
     filtro = (
@@ -336,6 +415,10 @@ def preparar_video(origen, destino, duracion):
     ])
 
 
+# ==========================================
+# CREACIÓN DE ESCENAS CON CLIPS DE RESPALDO
+# ==========================================
+
 def crear_escenas(guion, duracion_total):
     escenas = dividir_en_escenas(guion)
 
@@ -350,42 +433,99 @@ def crear_escenas(guion, duracion_total):
     clips = seleccionar_clips(estilo, cantidad)
 
     duracion_por_escena = duracion_total / cantidad
-    archivos = []
 
-    for indice, (escena, clip) in enumerate(
-        zip(escenas, clips)
-    ):
+    archivos = []
+    siguiente_clip = 0
+
+    for indice, escena in enumerate(escenas):
         print(
             f"[FONDO {indice + 1}/{cantidad}] "
-            f"Preparando estilo {estilo}..."
-        )
-
-        original = (
-            CARPETA_TEMP /
-            f"clip_{estilo}_{indice}.mp4"
+            "Preparando escena..."
         )
 
         preparado = (
-            CARPETA_TEMP /
-            f"escena_{indice}.mp4"
+            CARPETA_TEMP / f"escena_{indice}.mp4"
         )
 
-        descargar_video(
-            clip["url"],
-            original,
-        )
+        fondo_creado = False
 
-        preparar_video(
-            original,
-            preparado,
-            duracion_por_escena,
-        )
+        while siguiente_clip < len(clips):
+            clip = clips[siguiente_clip]
+            siguiente_clip += 1
 
-        guardar_fondo_usado(clip["id"])
-        archivos.append(preparado)
+            original = (
+                CARPETA_TEMP /
+                f"clip_{estilo}_{indice}_{siguiente_clip}.mp4"
+            )
+
+            try:
+                descargar_video(
+                    clip["url"],
+                    original,
+                )
+
+                preparar_video(
+                    original,
+                    preparado,
+                    duracion_por_escena,
+                )
+
+                if (
+                    not preparado.exists()
+                    or preparado.stat().st_size < 10000
+                ):
+                    raise RuntimeError(
+                        "El fondo procesado está vacío."
+                    )
+
+                guardar_fondo_usado(clip["id"])
+
+                archivos.append(preparado)
+                fondo_creado = True
+
+                print(
+                    f"[FONDO OK] Escena {indice + 1}: "
+                    f"clip {clip['id']}"
+                )
+
+                break
+
+            except Exception as error:
+                print(
+                    f"[AVISO] Clip {clip['id']} descartado: "
+                    f"{error}"
+                )
+
+                original.unlink(missing_ok=True)
+                preparado.unlink(missing_ok=True)
+
+        if not fondo_creado:
+            if archivos:
+                print(
+                    "[AVISO] Se agotaron los clips. "
+                    "Reutilizando el último fondo válido."
+                )
+
+                shutil.copy2(
+                    archivos[-1],
+                    preparado,
+                )
+
+                archivos.append(preparado)
+
+            else:
+                raise RuntimeError(
+                    "No se pudo descargar ningún fondo válido. "
+                    "Se cancela la generación para evitar "
+                    "un video negro."
+                )
 
     return archivos
 
+
+# ==========================================
+# UNIR ESCENAS
+# ==========================================
 
 def unir_escenas(archivos, destino):
     lista = CARPETA_TEMP / "lista_escenas.txt"
@@ -412,6 +552,10 @@ def unir_escenas(archivos, destino):
     ])
 
 
+# ==========================================
+# GENERAR NARRACIÓN
+# ==========================================
+
 async def generar_audio(texto, destino):
     try:
         comunicacion = edge_tts.Communicate(
@@ -435,6 +579,10 @@ async def generar_audio(texto, destino):
         await comunicacion.save(str(destino))
 
 
+# ==========================================
+# DURACIÓN DEL ARCHIVO
+# ==========================================
+
 def obtener_duracion(archivo):
     resultado = ejecutar([
         "ffprobe",
@@ -446,6 +594,10 @@ def obtener_duracion(archivo):
 
     return float(resultado.stdout.strip())
 
+
+# ==========================================
+# SUBTÍTULOS
+# ==========================================
 
 def escapar_ass(texto):
     texto = limpiar_texto(texto)
@@ -525,6 +677,10 @@ def crear_subtitulos(guion, duracion_audio, destino):
     )
 
 
+# ==========================================
+# MEZCLAR VIDEO Y AUDIO
+# ==========================================
+
 def mezclar_video_audio(video, audio, subtitulos, destino):
     ruta = str(subtitulos.resolve()).replace("\\", "/")
     ruta = ruta.replace(":", "\\:")
@@ -555,6 +711,10 @@ def mezclar_video_audio(video, audio, subtitulos, destino):
         str(destino),
     ])
 
+
+# ==========================================
+# GENERADOR PRINCIPAL
+# ==========================================
 
 async def renderizar_short(guion=None):
     verificar_ffmpeg()
@@ -653,7 +813,18 @@ async def renderizar_short(guion=None):
 
     if duracion_final > DURACION_MAXIMA:
         salida.unlink(missing_ok=True)
-        raise RuntimeError("El video supera el límite de duración.")
+        raise RuntimeError(
+            "El video supera el límite de duración."
+        )
+
+    if (
+        not salida.exists()
+        or salida.stat().st_size < 1_000_000
+    ):
+        salida.unlink(missing_ok=True)
+        raise RuntimeError(
+            "El video final está vacío o pesa menos de 1 MB."
+        )
 
     print("====================================")
     print("[OK] VIDEO TERMINADO")
