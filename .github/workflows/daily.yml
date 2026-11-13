@@ -11,7 +11,7 @@ on:
         default: true
 
   schedule:
-    - cron: "0 15 * * *"
+    - cron: "0 13 * * *"
 
 permissions:
   contents: write
@@ -50,6 +50,12 @@ jobs:
           ffmpeg -version
           ffprobe -version
 
+      - name: Limpiar videos anteriores
+        run: |
+          mkdir -p output
+          rm -f output/*.mp4
+          echo "Carpeta de videos limpia."
+
       - name: Generar Short
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -60,20 +66,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          VIDEO=$(find output -maxdepth 1 -type f -name '*.mp4' | head -n 1)
+          mapfile -t VIDEOS < <(
+            find output -maxdepth 1 -type f -name '*.mp4'
+          )
 
-          if [ -z "$VIDEO" ]; then
-            echo "ERROR: No se encontró ningún video."
+          if [ "${#VIDEOS[@]}" -ne 1 ]; then
+            echo "ERROR: Se esperaba exactamente un video."
+            echo "Videos encontrados: ${#VIDEOS[@]}"
+            find output -maxdepth 1 -type f
             exit 1
           fi
+
+          VIDEO="${VIDEOS[0]}"
 
           if [ ! -s "$VIDEO" ]; then
             echo "ERROR: El video está vacío."
             exit 1
           fi
 
+          SIZE=$(stat -c%s "$VIDEO")
+
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "ERROR: El video pesa menos de 1 MB."
+            exit 1
+          fi
+
           echo "VIDEO=$VIDEO" >> "$GITHUB_ENV"
-          echo "Video encontrado: $VIDEO"
+          echo "Video seleccionado: $VIDEO"
           ls -lh "$VIDEO"
 
       - name: Preparar metadatos
@@ -146,7 +165,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${FORTALEZA_UPLOAD_KEY:-}" ]; then
-            echo "ERROR: Falta el secreto FORTALEZA_UPLOAD_KEY."
+            echo "ERROR: Falta FORTALEZA_UPLOAD_KEY."
             exit 1
           fi
 
@@ -159,7 +178,7 @@ jobs:
           MAX_SIZE=$((90 * 1024 * 1024))
 
           if [ "$SIZE" -le 0 ] || [ "$SIZE" -gt "$MAX_SIZE" ]; then
-            echo "ERROR: El video supera el límite de 90 MB o está vacío."
+            echo "ERROR: Video vacío o supera 90 MB."
             exit 1
           fi
 
